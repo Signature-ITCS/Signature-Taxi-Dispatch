@@ -262,7 +262,7 @@ async function flagOrphanPayment(
 ) {
   if (!intentId) return;
   const reason =
-    "The customer paid on Stripe Checkout but the booking could not be saved. Refund them or create the booking by hand.";
+    "The customer paid on Stripe Checkout but the booking could not be saved. Refund them from the Stripe Dashboard or create the booking by hand.";
   const { error } = await admin.from("payments").insert({
     booking_id: null,
     amount,

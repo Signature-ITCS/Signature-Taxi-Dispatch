@@ -216,7 +216,7 @@ async function onPaymentSucceeded(admin: Admin, pi: Stripe.PaymentIntent) {
     receipt_url: receiptUrl,
     needs_review: orphan,
     review_reason: orphan
-      ? "Stripe confirmed this payment but no booking was ever saved for it. Refund the customer or create the booking by hand."
+      ? "Stripe confirmed this payment but no booking was ever saved for it. Refund the customer from the Stripe Dashboard or create the booking by hand."
       : null,
   });
   // 23505 = /api/book inserted it in the meantime. Nothing to do.

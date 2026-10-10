@@ -307,9 +307,6 @@ export default function BookingsPage() {
               : null
           }
           onClose={() => setDetail(null)}
-          onRefunded={(id) =>
-            setRows((rs) => rs.map((x) => (x.id === id ? { ...x, payment_status: "refunded" } : x)))
-          }
           onStatusChanged={(id, status) =>
             setRows((rs) => rs.map((x) => (x.id === id ? { ...x, status } : x)))
           }
@@ -323,20 +320,16 @@ function BookingDetailModal({
   row,
   linked,
   onClose,
-  onRefunded,
   onStatusChanged,
 }: {
   row: Row;
   linked?: Row | null;
   onClose: () => void;
-  onRefunded: (id: string) => void;
   onStatusChanged: (id: string, status: BookingStatus) => void;
 }) {
   const vias = (row.via_points ?? []).filter((v) => v.address);
   const review = row.review?.[0] ?? null;
-  const [payStatus, setPayStatus] = useState<string>(row.payment_status);
-  const [refunding, setRefunding] = useState(false);
-  const [refundErr, setRefundErr] = useState<string | null>(null);
+  const payStatus = row.payment_status;
   // Off-platform jobs have no driver and no dispatch flow moving them along, so
   // their status is whatever the office says it is.
   const [status, setStatus] = useState<BookingStatus>(row.status);
@@ -359,29 +352,6 @@ function BookingDetailModal({
     onStatusChanged(row.id, next);
   };
 
-  const refund = async () => {
-    if (!confirm(`Refund ${money(row.estimated_fare)} to ${row.customer_name}?`)) return;
-    setRefunding(true);
-    setRefundErr(null);
-    try {
-      const res = await fetch("/api/payment/refund", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ booking_id: row.id }),
-      });
-      const data = await res.json();
-      setRefunding(false);
-      if (!data?.ok) {
-        setRefundErr("Refund failed. Please try again.");
-        return;
-      }
-      setPayStatus("refunded");
-      onRefunded(row.id);
-    } catch {
-      setRefunding(false);
-      setRefundErr("Refund failed. Please try again.");
-    }
-  };
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
       <motion.div
@@ -522,17 +492,7 @@ function BookingDetailModal({
                 ? "Refunded"
                 : "Card — payment pending"}
             </span>
-            {row.payment_method === "card" && payStatus === "paid" && (
-              <button
-                onClick={refund}
-                disabled={refunding}
-                className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
-              >
-                {refunding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Refund"}
-              </button>
-            )}
           </div>
-          {refundErr && <p className="mt-2 text-xs text-red-600">{refundErr}</p>}
         </div>
 
         {row.external_provider && (

@@ -277,7 +277,7 @@ export interface PaymentAlertData {
   customerName?: string | null;
   customerEmail?: string | null;
   receiptUrl?: string | null;
-  /** Admin → Payments page, where staff can refund or attach the payment. */
+  /** Admin → Payments page, where staff can review the payment. */
   paymentsUrl?: string;
 }
 
@@ -285,7 +285,7 @@ const ALERT_COPY: Record<PaymentAlertKind, { subject: string; heading: string; s
   unmatched: {
     subject: "Payment taken but no booking",
     heading: "⚠️ Money in, no booking",
-    sub: "A card payment succeeded but no booking was ever saved for it. The customer has been charged and has nothing. Refund it or create the booking manually — today.",
+    sub: "A card payment succeeded but no booking was ever saved for it. The customer has been charged and has nothing. Refund it from the Stripe Dashboard or create the booking manually — today.",
   },
   review: {
     subject: "Card payment needs review",
