@@ -9,10 +9,9 @@
  */
 export function splitFare(total: number, outOriginal: number, retOriginal: number): { out: number; ret: number } {
   const sum = outOriginal + retOriginal;
-  // In proportion to what each leg originally cost; an even split only when we
-  // have nothing to go on.
-  const out =
-    sum > 0 ? Math.round(total * (outOriginal / sum) * 100) / 100 : Math.round((total / 2) * 100) / 100;
-  // The remainder, so rounding can never lose or invent a penny.
+  // Fares are whole pounds. In proportion to what each leg originally cost; an
+  // even split only when we have nothing to go on.
+  const out = sum > 0 ? Math.round(total * (outOriginal / sum)) : Math.round(total / 2);
+  // The remainder, so rounding can never lose or invent money.
   return { out, ret: Math.round((total - out) * 100) / 100 };
 }

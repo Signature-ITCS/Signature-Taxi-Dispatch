@@ -46,3 +46,23 @@ included in `00`/`01` except where noted.
 | `2026-09-12_stripe_checkout.sql` | `checkout_drafts` — trips parked while the customer pays on Stripe |
 | `2026-09-15_external_bookings.sql` | Off-platform bookings — **also defines `create_external_booking()`, so run this one** |
 | `2026-09-28_distance_bands_add_up.sql` | "Add up distance bands" switch in Admin → Pricing. Already in `01`/`02` for new instances; **run it on every instance created before 2026-09-28** |
+| `2026-10-09_job_status.sql` | Manual job status on bookings (processing, on hold, completed, cancelled, refunded). Already in `00` for new instances; **run it on every instance created before 2026-10-09** |
+| `2026-10-13_ride_thank_you.sql` | Thank-you email when a ride is completed: `bookings.thanks_sent_at`, the `notify_booking_completed` trigger (pg_net) and its webhook URL; also fixes the company name and SMS sender. Trigger and column are in `00`/`01`; **run this file on every instance** — the webhook URL is per-instance |
+| `2026-10-13_driver_app.sql` | Driver app: driver read access to their own jobs, `driver_*` functions (online/offline, location, job steps), automatic busy status, `driver_locations`, `push_subscriptions`, customer SMS on arrival/completion and driver push on assignment (`notify_booking_change`), realtime for bookings and drivers. **Not yet folded into `00`/`01` — run it on every instance, after `2026-10-13_ride_thank_you.sql`** |
+| `2026-10-15_reminders.sql` | One-hour pickup reminders: `bookings.reminder_sent_at`, pg_cron job `booking-reminders` (every 5 min) calling `/api/cron/reminders`. **Run it on every instance, after `2026-10-13_driver_app.sql`** |
+| `2026-10-15_scheduled_jobs.sql` | Accepting a pre-booked job no longer makes the driver busy until an hour before pickup; the 5-minute scheduler turns them busy on time. **Run after `2026-10-15_reminders.sql`** |
+| `2026-10-15_notifications.sql` | Staff notification bell: `staff_notifications` (written by a bookings trigger for new/assigned/accepted/declined/arrived/picked up/completed/cancelled/paid, plus reminders), `profiles.notifications_seen_at`, realtime, 30-day clean-up. **Run after `2026-10-15_scheduled_jobs.sql`** |
+| `2026-10-19_fixed_prices.sql` | Fixed prices between areas drawn on the map (`pricing_zones`, `fixed_routes`, `point_in_zone`, `find_fixed_route`), stops add their extra miles at the per-mile rate, and every fare is rounded to the nearest pound. Replaces `estimate_fare`, `quote_fares` and `create_booking` (new optional arguments). **Run after `2026-10-15_notifications.sql`** — the app works before and after it |
+
+`2026-10-09_sumup.sql` from the white-label kit is deliberately **not** here: this
+instance keeps Stripe, so the Stripe column names (`stripe_payment_intent_id`,
+`checkout_drafts.payment_intent_id`) and `stripe_events` stay as they are.
+Unlike the kit, `00`/`01` here are NOT updated with the October changes —
+on a brand-new instance run `00`, `01`, `2026-09-15_external_bookings.sql`,
+`02`, `2026-09-28_distance_bands_add_up.sql` and then every `2026-10-*` file
+above, in order.
+
+## Other files
+
+- `reset_demo_data.sql` — clears test bookings, customers and payments before go-live.
+- `BACKUPS.md` — nightly backups and one-click restore (GitHub Actions).

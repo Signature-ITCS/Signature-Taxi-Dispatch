@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { X, Loader2, Check, ExternalLink, Minus, Plus, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { isValidPhone, cn } from "@/lib/format";
+import PhoneInput from "@/components/PhoneInput";
 
 /**
  * "Add a job we arranged somewhere else."
@@ -129,14 +130,11 @@ export default function ExternalBookingModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
-      onClick={onClose}
-    >
+    // Closes only from the ✕ button, so a stray click can't lose a half-filled form.
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        onClick={(e) => e.stopPropagation()}
         className="flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-xl sm:max-h-[90vh] sm:max-w-xl sm:rounded-2xl"
       >
         {/* Header stays put while the form scrolls under it */}
@@ -156,8 +154,9 @@ export default function ExternalBookingModal({
           </div>
           <button
             onClick={onClose}
-            className="-mr-1 shrink-0 rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-ink-950"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
             aria-label="Close"
+            title="Close"
           >
             <X className="h-5 w-5" />
           </button>
@@ -185,10 +184,8 @@ export default function ExternalBookingModal({
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
               <Section title="Customer">
                 <Field value={name} onChange={setName} placeholder="Full name" />
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  <Field value={whatsapp} onChange={setWhatsapp} placeholder="Phone number" inputMode="tel" />
-                  <Field value={email} onChange={setEmail} placeholder="Email (optional)" inputMode="email" />
-                </div>
+                <PhoneInput value={whatsapp} onChange={setWhatsapp} placeholder="Phone number" inputClassName="py-2.5 text-sm" />
+                <Field value={email} onChange={setEmail} placeholder="Email (optional)" inputMode="email" />
               </Section>
 
               <Section title="Journey">

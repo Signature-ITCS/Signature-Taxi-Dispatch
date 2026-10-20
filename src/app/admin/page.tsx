@@ -57,7 +57,7 @@ export default function AdminOverview() {
   ];
 
   const toneMap: Record<string, string> = {
-    emerald: "bg-emerald-50 text-emerald-600",
+    emerald: "bg-brand-50 text-brand-600",
     blue: "bg-blue-50 text-blue-600",
     violet: "bg-violet-50 text-violet-600",
     amber: "bg-brand-50 text-brand-600",
@@ -69,7 +69,7 @@ export default function AdminOverview() {
 
       {loading ? (
         <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+          <Loader2 className="h-7 w-7 animate-spin text-brand-600" />
         </div>
       ) : (
         <div className="space-y-6 px-5 pb-10 md:px-8">
@@ -101,7 +101,7 @@ export default function AdminOverview() {
           >
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
               <h2 className="flex items-center gap-2 font-display font-bold text-ink-950">
-                <TrendingUp className="h-4 w-4 text-emerald-600" /> Recent Bookings
+                <TrendingUp className="h-4 w-4 text-brand-600" /> Recent Bookings
               </h2>
               <span className="text-sm text-gray-400">{active} active now</span>
             </div>

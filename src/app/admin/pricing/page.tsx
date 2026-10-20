@@ -8,6 +8,7 @@ import PageHeader from "@/components/admin/PageHeader";
 import { carIcon } from "@/components/booking/CarIcon";
 import { cn, money } from "@/lib/format";
 import { logActivity } from "@/lib/activity";
+import FixedPrices from "@/components/admin/FixedPrices";
 import type { VehicleCategory, PricingRule } from "@/lib/types";
 
 export default function PricingPage() {
@@ -71,6 +72,21 @@ export default function PricingPage() {
     setTimeout(() => setSavedId(null), 1500);
   };
 
+  // Off = not offered for booking (website, customer app, staff bookings).
+  const toggleCat = async (c: VehicleCategory) => {
+    if (c.is_active && cats.filter((x) => x.is_active).length === 1) {
+      alert("At least one vehicle type must stay on, or nobody can book.");
+      return;
+    }
+    setCats((cs) => cs.map((x) => (x.id === c.id ? { ...x, is_active: !c.is_active } : x)));
+    const { error } = await supabase.from("vehicle_categories").update({ is_active: !c.is_active }).eq("id", c.id);
+    if (error) {
+      setCats((cs) => cs.map((x) => (x.id === c.id ? { ...x, is_active: c.is_active } : x)));
+      return;
+    }
+    await logActivity(supabase, "pricing_updated", `${c.is_active ? "Disabled" : "Enabled"} vehicle type ${c.name}`);
+  };
+
   const toggleRule = async (r: PricingRule) => {
     await supabase.from("pricing_rules").update({ is_active: !r.is_active }).eq("id", r.id);
     load();
@@ -82,11 +98,11 @@ export default function PricingPage() {
 
   return (
     <div>
-      <PageHeader title="Pricing" subtitle="Fare = base fare + distance bands + extra charges" />
+      <PageHeader title="Pricing" subtitle="Fixed area prices first, otherwise base fare + distance bands + extra charges · rounded to the nearest £" />
 
       {loading ? (
         <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+          <Loader2 className="h-7 w-7 animate-spin text-brand-600" />
         </div>
       ) : (
         <div className="space-y-8 px-5 pb-10 md:px-8">
@@ -104,18 +120,45 @@ export default function PricingPage() {
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.06 }}
-                    className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
+                    className={cn(
+                      "rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-opacity",
+                      !c.is_active && "opacity-60"
+                    )}
                   >
                     <div className="mb-4 flex items-center gap-3">
                       <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
                         <Icon className="h-6 w-6" />
                       </div>
-                      <div>
-                        <p className="font-display font-bold text-ink-950">{c.name}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-display font-bold text-ink-950">
+                          {c.name}
+                          {!c.is_active && (
+                            <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 align-middle text-[10px] font-semibold uppercase text-gray-500">
+                              Off
+                            </span>
+                          )}
+                        </p>
                         <p className="text-xs text-gray-400">
                           {c.capacity} passengers · {c.suitcases} suitcases · {c.hand_bags} hand bags
                         </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleCat(c)}
+                        title={c.is_active ? "Offered for booking — click to turn off" : "Not offered — click to turn on"}
+                        aria-label={c.is_active ? `Turn off ${c.name}` : `Turn on ${c.name}`}
+                        className={cn(
+                          "relative h-6 w-11 shrink-0 rounded-full transition-colors",
+                          c.is_active ? "bg-brand-500" : "bg-gray-200"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all",
+                            c.is_active ? "left-[22px]" : "left-0.5"
+                          )}
+                        />
+                      </button>
                     </div>
                     <div className="mb-3 grid grid-cols-3 gap-3">
                       <IntField icon={Users} label="Passengers" value={c.capacity} onChange={(v) => editCat(c.id, "capacity", v)} />
@@ -133,7 +176,7 @@ export default function PricingPage() {
                       disabled={savingId === c.id}
                       className={cn(
                         "mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white transition-colors",
-                        savedId === c.id ? "bg-green-600" : "bg-emerald-600 hover:bg-emerald-700"
+                        savedId === c.id ? "bg-green-600" : "bg-brand-600 hover:bg-brand-700"
                       )}
                     >
                       {savingId === c.id ? (
@@ -152,6 +195,9 @@ export default function PricingPage() {
 
           {/* Distance rate bands (tapered pricing) */}
           <DistancePricing cats={cats} />
+
+          {/* Fixed prices between drawn areas (used before per-mile pricing) */}
+          <FixedPrices cats={cats} />
 
           {/* Add-ons */}
           <section>
@@ -179,7 +225,7 @@ export default function PricingPage() {
                   disabled={savingCsp}
                   className={cn(
                     "flex h-[38px] items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-white transition-colors",
-                    savedCsp ? "bg-green-600" : "bg-emerald-600 hover:bg-emerald-700"
+                    savedCsp ? "bg-green-600" : "bg-brand-600 hover:bg-brand-700"
                   )}
                 >
                   {savingCsp ? (
@@ -222,7 +268,7 @@ export default function PricingPage() {
                       onClick={() => toggleRule(r)}
                       className={cn(
                         "relative h-6 w-11 rounded-full transition-colors",
-                        r.is_active ? "bg-emerald-500" : "bg-gray-200"
+                        r.is_active ? "bg-brand-500" : "bg-gray-200"
                       )}
                     >
                       <span
@@ -269,7 +315,7 @@ function IntField({
           step={1}
           value={value}
           onChange={(e) => onChange(Math.max(0, Math.round(Number(e.target.value))))}
-          className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-7 pr-2 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/10"
+          className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-7 pr-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10"
         />
       </div>
     </label>
@@ -287,7 +333,7 @@ function NumField({ label, value, onChange }: { label: string; value: number; on
           step="0.01"
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-6 pr-2 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/10"
+          className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-6 pr-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10"
         />
       </div>
     </label>
@@ -415,7 +461,7 @@ function DistancePricing({ cats }: { cats: VehicleCategory[] }) {
   return (
     <section>
       <div className="mb-1 flex items-center gap-2">
-        <Layers className="h-4 w-4 text-emerald-600" />
+        <Layers className="h-4 w-4 text-brand-600" />
         <h2 className="font-display text-sm font-bold uppercase tracking-wide text-gray-400">
           Distance rate bands (per mile)
         </h2>
@@ -437,12 +483,12 @@ function DistancePricing({ cats }: { cats: VehicleCategory[] }) {
           checked={addUp}
           onChange={toggleAddUp}
           disabled={loading || savingMode}
-          className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-600"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
         />
         <span>
           <span className="flex items-center gap-2 text-sm font-semibold text-ink-950">
             Add up distance bands
-            {savingMode && <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />}
+            {savingMode && <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-600" />}
           </span>
           <span className="mt-1 block text-xs leading-relaxed text-gray-500">
             {addUp ? (
@@ -465,7 +511,7 @@ function DistancePricing({ cats }: { cats: VehicleCategory[] }) {
 
       {loading ? (
         <div className="flex h-24 items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+          <Loader2 className="h-6 w-6 animate-spin text-brand-600" />
         </div>
       ) : (
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -506,7 +552,7 @@ function DistancePricing({ cats }: { cats: VehicleCategory[] }) {
                 <div className="flex gap-2">
                   <button
                     onClick={() => addRow(c.id)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2 text-xs font-semibold text-gray-600 hover:border-emerald-300 hover:text-emerald-700"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2 text-xs font-semibold text-gray-600 hover:border-brand-300 hover:text-brand-700"
                   >
                     <Plus className="h-3.5 w-3.5" /> Add band
                   </button>
@@ -515,7 +561,7 @@ function DistancePricing({ cats }: { cats: VehicleCategory[] }) {
                     disabled={savingCat === c.id}
                     className={cn(
                       "flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white transition-colors",
-                      savedCat === c.id ? "bg-green-600" : "bg-emerald-600 hover:bg-emerald-700"
+                      savedCat === c.id ? "bg-green-600" : "bg-brand-600 hover:bg-brand-700"
                     )}
                   >
                     {savingCat === c.id ? (
@@ -544,7 +590,7 @@ function BandInput({ value, onChange, step = 0.1 }: { value: number; onChange: (
       step={step}
       value={value}
       onChange={(e) => onChange(Math.max(0, Number(e.target.value)))}
-      className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/10"
+      className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10"
     />
   );
 }
@@ -582,9 +628,9 @@ function FareCalculator({ cats }: { cats: VehicleCategory[] }) {
   };
 
   return (
-    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+    <div className="rounded-2xl border border-brand-100 bg-brand-50/40 p-4">
       <div className="mb-3 flex items-center gap-2">
-        <Calculator className="h-4 w-4 text-emerald-600" />
+        <Calculator className="h-4 w-4 text-brand-600" />
         <p className="text-sm font-bold text-ink-950">Price calculator</p>
         <span className="text-xs text-gray-400">Base fare + bands for a distance (daytime, no airport)</span>
       </div>
@@ -599,13 +645,13 @@ function FareCalculator({ cats }: { cats: VehicleCategory[] }) {
             onChange={(e) => setKm(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && km && calc()}
             placeholder="e.g. 12"
-            className="w-28 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-400"
+            className="w-28 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400"
           />
         </label>
         <button
           onClick={calc}
           disabled={busy || !km}
-          className="flex h-[38px] items-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-gray-300"
+          className="flex h-[38px] items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 disabled:bg-gray-300"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Calculate"}
         </button>
@@ -662,7 +708,7 @@ function AddRule({ onAdded }: { onAdded: () => void }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="flex w-full items-center justify-center gap-2 py-3.5 text-sm font-semibold text-emerald-600 hover:bg-emerald-50"
+        className="flex w-full items-center justify-center gap-2 py-3.5 text-sm font-semibold text-brand-600 hover:bg-brand-50"
       >
         <Plus className="h-4 w-4" /> Add charge
       </button>
@@ -676,12 +722,12 @@ function AddRule({ onAdded }: { onAdded: () => void }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Name (e.g. Airport)"
-          className="col-span-2 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+          className="col-span-2 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400"
         />
         <select
           value={type}
           onChange={(e) => setType(e.target.value as "fixed" | "percentage")}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+          className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400"
         >
           <option value="fixed">Fixed £</option>
           <option value="percentage">Percentage %</option>
@@ -691,17 +737,17 @@ function AddRule({ onAdded }: { onAdded: () => void }) {
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           placeholder="Amount"
-          className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+          className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400"
         />
         <input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           placeholder="Address keyword (optional, e.g. airport)"
-          className="col-span-2 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+          className="col-span-2 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400"
         />
       </div>
       <div className="flex gap-2">
-        <button onClick={add} disabled={saving} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+        <button onClick={add} disabled={saving} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="h-4 w-4" /> Add</>}
         </button>
         <button onClick={() => setOpen(false)} className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-300">

@@ -25,6 +25,8 @@ export function homeForRole(role: UserRole): string {
       return "/admin";
     case "dispatcher":
       return "/dispatch";
+    case "driver":
+      return "/driver";
     default:
       return "/";
   }

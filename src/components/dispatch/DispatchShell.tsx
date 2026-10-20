@@ -3,13 +3,17 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Radio, ClipboardList, CarFront, Users, LogOut } from "lucide-react";
+import { Radio, ClipboardList, CarFront, Users, LogOut, Map as MapIcon, CalendarDays } from "lucide-react";
 import SignOutButton from "@/components/dashboard/SignOutButton";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/format";
+import { LogoMark } from "@/components/Brand";
+import NotificationBell from "@/components/dashboard/NotificationBell";
 
 const NAV = [
   { href: "/dispatch", label: "Live board", short: "Live", icon: Radio },
+  { href: "/dispatch/map", label: "Map", short: "Map", icon: MapIcon },
+  { href: "/dispatch/calendar", label: "Calendar", short: "Calendar", icon: CalendarDays },
   { href: "/dispatch/bookings", label: "Bookings", short: "Bookings", icon: ClipboardList },
   { href: "/dispatch/drivers", label: "Drivers", short: "Drivers", icon: CarFront },
   { href: "/dispatch/customers", label: "Customers", short: "Customers", icon: Users },
@@ -38,12 +42,13 @@ export default function DispatchShell({
       {/* Sidebar — tablet / desktop */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-gray-200 bg-white md:flex">
         <div className="flex items-center gap-2.5 px-5 py-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600">
-            <Radio className="h-5 w-5 text-white" strokeWidth={2.3} />
+          <LogoMark size={36} />
+          <div className="min-w-0">
+            <p className="font-display text-sm font-bold leading-tight text-ink-950">Signature Transfers</p>
+            <p className="text-xs text-gray-400">Dispatch</p>
           </div>
-          <div>
-            <p className="font-display text-sm font-bold leading-tight text-ink-950">Dispatch</p>
-            <p className="text-xs text-gray-400">TaxiFlow</p>
+          <div className="ml-auto">
+            <NotificationBell variant="sidebar" />
           </div>
         </div>
 
@@ -56,13 +61,13 @@ export default function DispatchShell({
                 href={item.href}
                 className={cn(
                   "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                  active ? "text-blue-700" : "text-gray-500 hover:bg-gray-50 hover:text-ink-950"
+                  active ? "text-brand-700" : "text-gray-500 hover:bg-gray-50 hover:text-ink-950"
                 )}
               >
                 {active && (
                   <motion.span
                     layoutId="dispatch-active"
-                    className="absolute inset-0 rounded-xl bg-blue-50"
+                    className="absolute inset-0 rounded-xl bg-brand-50"
                     transition={{ type: "spring", stiffness: 400, damping: 32 }}
                   />
                 )}
@@ -75,7 +80,7 @@ export default function DispatchShell({
 
         <div className="space-y-2 border-t border-gray-100 p-3">
           <div className="flex min-w-0 items-center gap-2.5 px-2 py-1.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
               {name.charAt(0)}
             </div>
             <div className="min-w-0 leading-tight">
@@ -93,12 +98,14 @@ export default function DispatchShell({
         {children}
       </main>
 
+      <NotificationBell variant="floating" />
+
       {/* Bottom tab bar — phones only */}
       <nav
         aria-label="Dispatch navigation"
         className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
       >
-        <div className="grid h-16 grid-cols-5">
+        <div className="grid h-16 grid-cols-7">
           {NAV.map((item) => {
             const active = pathname === item.href;
             return (
@@ -107,13 +114,13 @@ export default function DispatchShell({
                 href={item.href}
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 text-[10.5px] font-semibold transition-colors",
-                  active ? "text-blue-600" : "text-gray-400 active:text-ink-950"
+                  active ? "text-brand-600" : "text-gray-400 active:text-ink-950"
                 )}
               >
                 <span
                   className={cn(
                     "flex h-8 w-12 items-center justify-center rounded-full transition-colors",
-                    active && "bg-blue-50"
+                    active && "bg-brand-50"
                   )}
                 >
                   <item.icon className="h-[20px] w-[20px]" strokeWidth={active ? 2.4 : 2} />

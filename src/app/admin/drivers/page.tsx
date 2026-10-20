@@ -20,12 +20,16 @@ import {
   AlertTriangle,
   MessageSquare,
   ChevronDown,
-  Banknote,
+  Smartphone,
+  Search,
+  KeyRound,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PageHeader from "@/components/admin/PageHeader";
+import Pagination, { usePagedList } from "@/components/dashboard/Pagination";
+import { matchesDriver } from "@/components/dashboard/DriverSearch";
 import SheetHandle from "@/components/dashboard/SheetHandle";
-import { cn, dateTime, money } from "@/lib/format";
+import { cn, dateTime } from "@/lib/format";
 import { logActivity } from "@/lib/activity";
 import type { Driver } from "@/lib/types";
 
@@ -57,11 +61,24 @@ export default function DriversPage() {
   const [showModal, setShowModal] = useState(false);
   const [toDelete, setToDelete] = useState<DriverRow | null>(null);
   const [reviews, setReviews] = useState<Record<string, ReviewRow[]>>({});
-  const [cash, setCash] = useState<Record<string, { amount: number; count: number }>>({});
-  const [settling, setSettling] = useState<string | null>(null);
+  const [loginFor, setLoginFor] = useState<DriverRow | null>(null);
+  const [q, setQ] = useState("");
+  const shown = drivers.filter((d) => matchesDriver(d, q));
+  const { page, setPage, pageSize, setPageSize, pageItems, total } = usePagedList(shown, "drivers", 25);
+
+  const removeLogin = async (d: DriverRow) => {
+    if (!confirm(`Remove ${d.full_name}'s driver app login? They will be signed out and stop getting job alerts.`)) return;
+    const res = await fetch("/api/admin/driver-login", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ driver_id: d.id }),
+    }).then((r) => r.json()).catch(() => null);
+    if (!res?.ok) alert("Could not remove the login. Try again.");
+    load();
+  };
 
   const load = async () => {
-    const [{ data: drv }, { data: rt }, { data: cashRows }] = await Promise.all([
+    const [{ data: drv }, { data: rt }] = await Promise.all([
       supabase
         .from("drivers")
         .select("*, vehicle:vehicles(id,category_id,make,model,color,license_plate)")
@@ -70,14 +87,6 @@ export default function DriversPage() {
         .from("ratings")
         .select("driver_id, rating, comment, created_at, booking:bookings(booking_number)")
         .order("created_at", { ascending: false }),
-      // Cash collected by each driver that hasn't been handed in to the office yet
-      supabase
-        .from("bookings")
-        .select("driver_id, final_fare, estimated_fare")
-        .eq("payment_method", "cash")
-        .eq("payment_status", "paid")
-        .eq("status", "completed")
-        .eq("cash_settled", false),
     ]);
     setDrivers((drv as DriverRow[]) ?? []);
 
@@ -88,30 +97,9 @@ export default function DriversPage() {
     });
     setReviews(grouped);
 
-    const cashMap: Record<string, { amount: number; count: number }> = {};
-    ((cashRows as { driver_id: string | null; final_fare: number | null; estimated_fare: number | null }[]) ?? []).forEach(
-      (r) => {
-        if (!r.driver_id) return;
-        const amt = Number(r.final_fare ?? r.estimated_fare ?? 0);
-        const cur = (cashMap[r.driver_id] ??= { amount: 0, count: 0 });
-        cur.amount += amt;
-        cur.count += 1;
-      }
-    );
-    setCash(cashMap);
     setLoading(false);
   };
 
-  const settle = async (d: DriverRow) => {
-    const held = cash[d.id];
-    if (!held?.amount) return;
-    if (!confirm(`Settle ${money(held.amount)} cash from ${d.full_name}? This clears their balance.`)) return;
-    setSettling(d.id);
-    await supabase.rpc("settle_driver_cash", { p_driver_id: d.id });
-    await logActivity(supabase, "cash_settled", `Settled ${money(held.amount)} cash from ${d.full_name}`);
-    setSettling(null);
-    load();
-  };
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -131,44 +119,43 @@ export default function DriversPage() {
     setShowModal(true);
   };
 
-  const totalCash = Object.values(cash).reduce((s, c) => s + c.amount, 0);
 
   return (
     <div>
       <PageHeader
         title="Drivers"
-        subtitle="Your fleet — notified by WhatsApp"
+        subtitle="Your fleet — driver app or WhatsApp"
         action={
           <button
             onClick={openAdd}
-            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 sm:gap-2 sm:px-4"
+            className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 sm:gap-2 sm:px-4"
           >
             <Plus className="h-4 w-4" /> Add Driver
           </button>
         }
       />
 
-      {totalCash > 0 && (
-        <div className="px-5 md:px-8">
-          <div className="mb-4 flex items-center gap-2 rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-800">
-            <Banknote className="h-4 w-4 shrink-0" />
-            <span>
-              Total cash out with drivers: <b>{money(totalCash)}</b> — collected, not yet handed in to the office.
-            </span>
-          </div>
-        </div>
-      )}
-
       {loading ? (
         <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+          <Loader2 className="h-7 w-7 animate-spin text-brand-600" />
         </div>
       ) : drivers.length === 0 ? (
         <p className="px-5 py-16 text-center text-sm text-gray-400 md:px-8">No drivers yet — add your first one.</p>
       ) : (
         // grid-cols-1 = minmax(0,1fr): long emails/addresses truncate instead of widening the card
-        <div className="grid grid-cols-1 gap-4 px-5 pb-10 md:grid-cols-2 md:px-8">
-          {drivers.map((d, i) => {
+        <div className="px-5 pb-10 md:px-8">
+        <div className="relative mb-4">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={`Search ${drivers.length} drivers by name, area or phone…`}
+            className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-base outline-none focus:border-brand-400 md:text-sm"
+          />
+        </div>
+        {shown.length === 0 && <p className="py-12 text-center text-sm text-gray-400">No driver matches “{q}”.</p>}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {pageItems.map((d, i) => {
             const v = d.vehicle?.[0];
             const car = v ? [v.color, v.make, v.model].filter(Boolean).join(" ") : null;
             return (
@@ -236,6 +223,43 @@ export default function DriversPage() {
                   </div>
                 </div>
 
+                {/* Driver app login */}
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gray-50 px-3 py-2.5">
+                  <span className="flex min-w-0 items-center gap-1.5 text-sm">
+                    <Smartphone className={cn("h-4 w-4 shrink-0", d.profile_id ? "text-green-600" : "text-gray-400")} />
+                    {d.profile_id ? (
+                      <span className="font-semibold text-ink-950">
+                        Driver app ·{" "}
+                        <span
+                          className={
+                            d.availability === "offline"
+                              ? "text-gray-400"
+                              : d.availability === "on_trip"
+                                ? "text-brand-600"
+                                : "text-green-600"
+                          }
+                        >
+                          {d.availability === "offline" ? "Offline" : d.availability === "on_trip" ? "Busy" : "Online"}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-gray-500">No app login — jobs go by WhatsApp</span>
+                    )}
+                  </span>
+                  {d.profile_id ? (
+                    <button onClick={() => removeLogin(d)} className="text-xs font-semibold text-gray-400 hover:text-red-600">
+                      Remove login
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setLoginFor(d)}
+                      className="flex items-center gap-1.5 rounded-lg bg-ink-950 px-3 py-1.5 text-xs font-semibold text-white"
+                    >
+                      <KeyRound className="h-3.5 w-3.5" /> Create app login
+                    </button>
+                  )}
+                </div>
+
                 {/* Phone actions — big labelled tap targets instead of tiny icons */}
                 <div className="mt-3 grid grid-cols-4 gap-1.5 border-t border-gray-50 pt-3 sm:hidden">
                   <MobileAction icon={Pencil} label="Edit" onClick={() => openEdit(d)} />
@@ -254,32 +278,26 @@ export default function DriversPage() {
                   <MobileAction icon={Trash2} label="Delete" onClick={() => setToDelete(d)} danger />
                 </div>
 
-                {cash[d.id]?.amount > 0 && (
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-green-100 bg-green-50/60 px-3 py-2.5">
-                    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm font-semibold text-green-700">
-                      <Banknote className="h-4 w-4 shrink-0" /> Cash held: {money(cash[d.id].amount)}
-                      <span className="text-xs font-normal text-green-600">({cash[d.id].count} rides)</span>
-                    </span>
-                    <button
-                      onClick={() => settle(d)}
-                      disabled={settling === d.id}
-                      className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
-                    >
-                      {settling === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Settle"}
-                    </button>
-                  </div>
-                )}
-
                 {reviews[d.id]?.length ? <DriverReviews list={reviews[d.id]} /> : null}
               </motion.div>
             );
           })}
+        </div>
+        <Pagination
+          className="mt-4"
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPage={setPage}
+          onPageSize={setPageSize}
+        />
         </div>
       )}
 
       {showModal && (
         <DriverModal driver={modalDriver} onClose={() => setShowModal(false)} onDone={load} />
       )}
+      {loginFor && <AppLoginModal driver={loginFor} onClose={() => setLoginFor(null)} onDone={load} />}
       {toDelete && (
         <DeleteConfirm driver={toDelete} onClose={() => setToDelete(null)} onDone={load} />
       )}
@@ -485,6 +503,9 @@ function DriverModal({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // New drivers can be given the driver app straight away.
+  const [giveApp, setGiveApp] = useState(true);
+  const [appPassword, setAppPassword] = useState(() => suggestPassword());
 
   useEffect(() => {
     supabase
@@ -505,6 +526,10 @@ function DriverModal({
   const submit = async () => {
     if (!form.full_name.trim() || !form.whatsapp.trim() || !form.service_area.trim()) {
       setError("Name, WhatsApp and service area are required.");
+      return;
+    }
+    if (!editing && giveApp && (!form.email.trim() || appPassword.length < 8)) {
+      setError("For the driver app, enter the driver's email and a password of at least 8 characters.");
       return;
     }
     setSaving(true);
@@ -552,6 +577,10 @@ function DriverModal({
       if (hasVehicle) {
         await supabase.from("vehicles").insert({ driver_id: newDriver.id, ...vehiclePayload });
       }
+      if (giveApp) {
+        const res = await createAppLogin(newDriver.id, form.email.trim(), appPassword);
+        alert(res);
+      }
     }
 
     await logActivity(
@@ -595,7 +624,7 @@ function DriverModal({
           <select
             value={form.category_id}
             onChange={(e) => set("category_id", e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-base outline-none focus:border-emerald-400 sm:text-sm"
+            className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-base outline-none focus:border-brand-400 sm:text-sm"
           >
             {cats.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
@@ -607,6 +636,29 @@ function DriverModal({
             <Input value={form.color} onChange={(v) => set("color", v)} placeholder="Colour (Silver)" />
             <Input value={form.license_plate} onChange={(v) => set("license_plate", v)} placeholder="Plate (LX21 ABC)" />
           </div>
+          {!editing && (
+            <div className="rounded-xl border border-gray-200 p-3">
+              <label className="flex items-start gap-2.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={giveApp}
+                  onChange={(e) => setGiveApp(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-brand-600"
+                />
+                <span>
+                  <span className="font-semibold text-ink-950">Give this driver the driver app</span>
+                  <span className="block text-xs text-gray-500">
+                    Creates their login and emails it with the install link. Uses the email above.
+                  </span>
+                </span>
+              </label>
+              {giveApp && (
+                <div className="mt-2.5">
+                  <Input value={appPassword} onChange={setAppPassword} placeholder="App password (min 8 characters)" />
+                </div>
+              )}
+            </div>
+          )}
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
 
@@ -614,7 +666,7 @@ function DriverModal({
           <button
             onClick={submit}
             disabled={saving}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-gray-300"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:bg-gray-300"
           >
             {saving ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -649,7 +701,99 @@ function Input({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       // 16px on phones so iOS Safari doesn't auto-zoom the page on focus
-      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-base outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/10 sm:text-sm"
+      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-base outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 sm:text-sm"
     />
+  );
+}
+
+/** A readable random password: no look-alike characters (0/O, 1/l). */
+function suggestPassword(): string {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const pick = new Uint32Array(10);
+  crypto.getRandomValues(pick);
+  return Array.from(pick, (n) => chars[n % chars.length]).join("");
+}
+
+const LOGIN_ERRORS: Record<string, string> = {
+  missing_fields: "Enter an email and password.",
+  password_too_short: "The password must be at least 8 characters.",
+  already_has_login: "This driver already has an app login.",
+  driver_not_found: "Driver not found — refresh the page.",
+  unauthorized: "Only admins can create driver logins.",
+};
+
+/** Calls the API and returns a sentence for the admin. */
+async function createAppLogin(driverId: string, email: string, password: string): Promise<string> {
+  const res = await fetch("/api/admin/driver-login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ driver_id: driverId, email, password }),
+  })
+    .then((r) => r.json())
+    .catch(() => null);
+  if (!res?.ok) {
+    return `Driver saved, but the app login was not created: ${LOGIN_ERRORS[res?.error] ?? res?.error ?? "network error"}`;
+  }
+  return res.emailed
+    ? `Driver app login created and emailed to ${email} with the install link.`
+    : `Driver app login created, but the email could not be sent. Give the driver these details:\n\nInstall: ${window.location.origin}/install/driver\nEmail: ${email}\nPassword: ${password}`;
+}
+
+function AppLoginModal({ driver, onClose, onDone }: { driver: DriverRow; onClose: () => void; onDone: () => void }) {
+  const [email, setEmail] = useState(driver.email ?? "");
+  const [password, setPassword] = useState(() => suggestPassword());
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  const submit = async () => {
+    setSaving(true);
+    const msg = await createAppLogin(driver.id, email.trim(), password);
+    setSaving(false);
+    setResult(msg);
+    onDone();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full rounded-t-3xl bg-white p-5 pb-[calc(20px+env(safe-area-inset-bottom))] shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"
+      >
+        <SheetHandle />
+        <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink-950">
+          <Smartphone className="h-5 w-5 text-brand-600" /> Driver app for {driver.full_name}
+        </h2>
+        {result ? (
+          <>
+            <p className="mt-3 whitespace-pre-line text-sm text-gray-600">{result}</p>
+            <button onClick={onClose} className="mt-5 w-full rounded-xl bg-ink-950 py-2.5 text-sm font-semibold text-white">
+              Done
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="mt-1 text-sm text-gray-500">
+              They&apos;ll get an email with this login and a link to install the driver app.
+            </p>
+            <div className="mt-4 space-y-3">
+              <Input type="email" value={email} onChange={setEmail} placeholder="Driver's email" />
+              <Input value={password} onChange={setPassword} placeholder="Password (min 8 characters)" />
+            </div>
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={submit}
+                disabled={saving || !email.trim() || password.length < 8}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:bg-gray-300"
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><KeyRound className="h-4 w-4" /> Create login</>}
+              </button>
+              <button onClick={onClose} className="rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-200">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

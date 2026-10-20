@@ -22,7 +22,7 @@ export async function getStripe(): Promise<Stripe | null> {
       // idempotency key to its own retries, so this can't double-charge.
       maxNetworkRetries: 2,
       timeout: 20_000,
-      appInfo: { name: "TaxiFlow", url: "https://github.com/abbasskakar" },
+      appInfo: { name: "Signature Transfers Dispatch" },
     });
   }
   return cached;

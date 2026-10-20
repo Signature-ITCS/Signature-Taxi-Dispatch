@@ -44,7 +44,7 @@ export default function DispatchersPage() {
         action={
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+            className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
           >
             <Plus className="h-4 w-4" /> Add Dispatcher
           </button>
@@ -53,7 +53,7 @@ export default function DispatchersPage() {
 
       {loading ? (
         <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+          <Loader2 className="h-7 w-7 animate-spin text-brand-600" />
         </div>
       ) : rows.length === 0 ? (
         <p className="px-5 py-16 text-center text-sm text-gray-400 md:px-8">
@@ -165,7 +165,7 @@ function AddDispatcher({ onClose, onDone }: { onClose: () => void; onDone: () =>
           <div
             className={cn(
               "mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full",
-              done.emailed ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
+              done.emailed ? "bg-brand-50 text-brand-600" : "bg-amber-50 text-amber-600"
             )}
           >
             {done.emailed ? <MailCheck className="h-7 w-7" /> : <AlertTriangle className="h-7 w-7" />}
@@ -189,7 +189,7 @@ function AddDispatcher({ onClose, onDone }: { onClose: () => void; onDone: () =>
           )}
           <button
             onClick={onClose}
-            className="mt-5 w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+            className="mt-5 w-full rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
           >
             Done
           </button>
@@ -219,7 +219,7 @@ function AddDispatcher({ onClose, onDone }: { onClose: () => void; onDone: () =>
           <button
             onClick={add}
             disabled={saving}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-gray-300"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:bg-gray-300"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (<><Check className="h-4 w-4" /> Add Dispatcher</>)}
           </button>
@@ -318,7 +318,7 @@ function Input({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/10"
+      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10"
     />
   );
 }

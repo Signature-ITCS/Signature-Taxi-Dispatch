@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { callRpc } from "@/lib/supabaseRest";
+import { callRpcCompat } from "@/lib/supabaseRest";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegDistance, type LegInput } from "@/lib/googleRoute";
 import { isValidPhone } from "@/lib/format";
@@ -7,6 +7,7 @@ import { sendEmail, emailEnabled } from "@/lib/email";
 import { sendSms, smsEnabled } from "@/lib/sms";
 import { customerConfirmationEmail, staffAlertEmail, type BookingEmailData } from "@/lib/emailTemplates";
 import { staffAlertRecipients } from "@/lib/notifyStaff";
+import { BRAND } from "@/lib/brand";
 
 /**
  * The one place a booking is written and announced.
@@ -27,9 +28,11 @@ export interface Leg extends LegInput {
 
 export interface BookingInput {
   site?: string;
+  /** Optional — blank becomes the returning customer's known name, or "Customer". */
   name: string;
   whatsapp: string;
-  email: string;
+  /** Optional — without it the customer just doesn't get the confirmation email. */
+  email?: string | null;
   category_id: string;
   payment_method?: "cash" | "card";
   notes?: string | null;
@@ -53,11 +56,54 @@ export interface LegResult {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Everything a booking needs before we spend money on Google/Stripe calls. */
+/** Shown (and stored) when a booking comes in without a name. */
+export const NO_NAME = "Customer";
+
+/**
+ * Name and email are optional; only the phone number is required.
+ *
+ * A blank name would otherwise be stored as "Customer" — and because the
+ * database keeps one customer record per phone number, that would overwrite a
+ * returning customer's real name. So a blank name is filled from the existing
+ * customer record when there is one. A blank email becomes null.
+ */
+export async function normalizeBookingInput(b: Partial<BookingInput>): Promise<void> {
+  if (!b) return;
+  b.email = b.email?.trim() || null;
+  const name = b.name?.trim() ?? "";
+  if (name) {
+    b.name = name;
+    return;
+  }
+  let known: string | null = null;
+  const phone = b.whatsapp?.trim();
+  if (phone) {
+    try {
+      const { data } = await createAdminClient().from("customers").select("full_name").eq("whatsapp", phone).maybeSingle();
+      known = data?.full_name?.trim() || null;
+    } catch {
+      known = null;
+    }
+  }
+  b.name = known ?? NO_NAME;
+}
+
 export function validateBookingInput(b: Partial<BookingInput>): string | null {
-  if (!b?.name?.trim() || !b?.whatsapp?.trim() || !b?.category_id || !b?.outbound) return "missing_fields";
-  if (!b.email?.trim() || !EMAIL_RE.test(b.email.trim())) return "invalid_email";
+  if (!b?.whatsapp?.trim() || !b?.category_id || !b?.outbound) return "missing_fields";
+  // Email is optional — but if one was typed, it has to be a real address.
+  if (b.email?.trim() && !EMAIL_RE.test(b.email.trim())) return "invalid_email";
   if (!isValidPhone(b.whatsapp)) return "invalid_phone";
   return null;
+}
+
+/**
+ * False when the vehicle type was switched off in Admin → Pricing (or doesn't
+ * exist) — e.g. a page that still had it on screen. Checked before a booking
+ * or a card payment starts; never after the money is taken.
+ */
+export async function categoryBookable(id: string): Promise<boolean> {
+  const { data } = await createAdminClient().from("vehicle_categories").select("is_active").eq("id", id).maybeSingle();
+  return !!data?.is_active;
 }
 
 export interface CreatedTrip {
@@ -90,7 +136,7 @@ export async function createTrip(
     const resolved = await resolveLegDistance(leg, { trustClient: opts.trustClient });
     if (!resolved) return { ok: false, error: "no_route" };
     const { distance_km, duration_min } = resolved;
-    const { data } = await callRpc<LegResult>("create_booking", {
+    const { data } = await callRpcCompat<LegResult>("create_booking", {
       p_api_key: apiKey,
       p_customer_name: b.name,
       p_whatsapp: b.whatsapp,
@@ -115,6 +161,9 @@ export async function createTrip(
       p_passengers: b.passengers ?? 1,
       p_suitcases: b.suitcases ?? 0,
       p_hand_luggage: b.hand_luggage ?? 0,
+    }, {
+      // Direct (no-stops) distance: a fixed area price adds the stops' extra miles.
+      p_direct_km: resolved.direct_km,
     });
     return data;
   };
@@ -161,7 +210,9 @@ export async function notifyBooking(opts: NotifyOptions): Promise<void> {
             minute: "2-digit",
           })
         : "ASAP";
-      const site = outbound.website || "Your taxi";
+      // Always the company name — the website row is named after where the
+      // widget sits ("Main Website"), which means nothing to a passenger.
+      const site = BRAND.name;
       await sendSms(
         b.whatsapp,
         `${site}: Booking confirmed. Ref ${outbound.booking_number}. ` +
@@ -186,7 +237,7 @@ export async function notifyBooking(opts: NotifyOptions): Promise<void> {
         bookingNumber: outbound.booking_number ?? "",
         customerName: b.name,
         customerWhatsapp: b.whatsapp,
-        customerEmail: b.email,
+        customerEmail: b.email ?? null,
         pickup: out.pickup_address,
         vias: (out.via_points ?? []).map((v) => v.address).filter(Boolean),
         dropoff: out.dropoff_address,
@@ -200,11 +251,12 @@ export async function notifyBooking(opts: NotifyOptions): Promise<void> {
         returnBookingNumber: trip.return?.booking_number ?? null,
         trackUrl: `${origin}/track/${outbound.booking_number}`,
         installUrl: `${origin}/install`,
-        siteName: outbound.website,
+        siteName: BRAND.name,
       };
 
       const customer = customerConfirmationEmail(data);
-      const staffMail = staffAlertEmail(data, `${origin}/dispatch`);
+      // Staff do want to know which website it came from.
+      const staffMail = staffAlertEmail({ ...data, siteName: outbound.website }, `${origin}/dispatch`);
       await Promise.all([
         b.email ? sendEmail({ to: b.email, subject: customer.subject, html: customer.html }) : null,
         staffEmails.length

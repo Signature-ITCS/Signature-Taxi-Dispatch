@@ -9,7 +9,7 @@
  * sessionStorage is deliberate: per-tab, and gone when the tab closes, which is
  * exactly the lifetime of "I was in the middle of paying".
  */
-const KEY = "taxiflow:checkout-draft";
+const KEY = "signaturetransfers:checkout-draft";
 
 export function rememberCheckout(draftId: string): void {
   try {

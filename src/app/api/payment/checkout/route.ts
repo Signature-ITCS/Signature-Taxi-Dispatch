@@ -5,7 +5,7 @@ import { getWebsiteKey } from "@/lib/getWebsiteKey";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { priceTrip } from "@/lib/pricing";
 import { quoteSignature } from "@/lib/quoteSignature";
-import { validateBookingInput, type BookingInput } from "@/lib/bookingFlow";
+import { normalizeBookingInput, validateBookingInput, categoryBookable, type BookingInput } from "@/lib/bookingFlow";
 import { rateLimit, clientIp } from "@/lib/rateLimit";
 import { cardPaymentsEnabled } from "@/lib/paymentMethods";
 import { draftCookieValue } from "@/lib/draftCookie";
@@ -38,8 +38,12 @@ export async function POST(req: Request) {
 
   // Validate the FULL booking now, not after payment: taking money for a trip
   // we would then refuse to save is the one outcome worth engineering against.
+  await normalizeBookingInput(b);
   const invalid = validateBookingInput(b);
   if (invalid) return NextResponse.json({ ok: false, error: invalid });
+  if (!(await categoryBookable(b.category_id as string))) {
+    return NextResponse.json({ ok: false, error: "category_unavailable" });
+  }
 
   const site = b.site ?? "main";
   const apiKey = await getWebsiteKey(site);
@@ -91,7 +95,6 @@ export async function POST(req: Request) {
     .from("checkout_drafts")
     .select("id, session_id")
     .eq("quote_sig", sig)
-    .eq("customer_email", input.email)
     .eq("status", "open")
     .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false })
@@ -119,7 +122,7 @@ export async function POST(req: Request) {
         // "Book" instead of "Pay" on the button — it is a ride, not a product.
         submit_type: "book",
         locale: "en-GB",
-        customer_email: input.email,
+        customer_email: input.email ?? undefined,
         client_reference_id: draftId,
         line_items: [
           {
@@ -165,7 +168,7 @@ export async function POST(req: Request) {
     amount: total,
     currency: "gbp",
     website_slug: site,
-    customer_email: input.email,
+    customer_email: input.email ?? null,
     quote_sig: sig,
     status: "open",
   });

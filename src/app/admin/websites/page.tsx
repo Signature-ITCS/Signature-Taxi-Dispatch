@@ -85,7 +85,7 @@ export default function WebsitesPage() {
         action={
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+            className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
           >
             <Plus className="h-4 w-4" /> Add Widget
           </button>
@@ -94,7 +94,7 @@ export default function WebsitesPage() {
 
       {loading ? (
         <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+          <Loader2 className="h-7 w-7 animate-spin text-brand-600" />
         </div>
       ) : (
         <div className="grid gap-4 px-5 pb-10 md:grid-cols-2 md:px-8">
@@ -120,7 +120,7 @@ export default function WebsitesPage() {
                   <button
                     onClick={() => toggle(s)}
                     title={s.is_active ? "Turn off" : "Turn on"}
-                    className={cn("relative h-6 w-11 rounded-full transition-colors", s.is_active ? "bg-emerald-500" : "bg-gray-200")}
+                    className={cn("relative h-6 w-11 rounded-full transition-colors", s.is_active ? "bg-brand-500" : "bg-gray-200")}
                   >
                     <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all", s.is_active ? "left-[22px]" : "left-0.5")} />
                   </button>
@@ -139,8 +139,8 @@ export default function WebsitesPage() {
               <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">API key</p>
               <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
                 <code className="flex-1 truncate font-mono text-xs text-gray-500">{s.api_key}</code>
-                <button onClick={() => copy(s.api_key)} className="rounded p-1 text-gray-400 hover:text-emerald-600">
-                  {copied === s.api_key ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                <button onClick={() => copy(s.api_key)} className="rounded p-1 text-gray-400 hover:text-brand-600">
+                  {copied === s.api_key ? <Check className="h-4 w-4 text-brand-600" /> : <Copy className="h-4 w-4" />}
                 </button>
               </div>
 
@@ -153,11 +153,11 @@ export default function WebsitesPage() {
                 </code>
                 <button
                   onClick={() => copy(embedCode(s.slug))}
-                  className="shrink-0 rounded p-1 text-gray-400 hover:text-emerald-600"
+                  className="shrink-0 rounded p-1 text-gray-400 hover:text-brand-600"
                   title="Copy embed code"
                 >
                   {copied === embedCode(s.slug) ? (
-                    <Check className="h-4 w-4 text-emerald-600" />
+                    <Check className="h-4 w-4 text-brand-600" />
                   ) : (
                     <Copy className="h-4 w-4" />
                   )}
@@ -167,7 +167,7 @@ export default function WebsitesPage() {
                 href={`/embed/${s.slug}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-600 hover:underline"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline"
               >
                 <ExternalLink className="h-3 w-3" /> Preview widget
               </a>
@@ -186,12 +186,12 @@ export default function WebsitesPage() {
           >
             <h3 className="mb-4 font-display text-lg font-bold text-ink-950">Add Widget</h3>
             <div className="space-y-3">
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Website name" className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-emerald-400" />
-              <input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="Slug (e.g. citycabs)" className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-emerald-400" />
-              <input value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })} placeholder="Domain (optional)" className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-emerald-400" />
+              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Website name" className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-400" />
+              <input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="Slug (e.g. citycabs)" className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-400" />
+              <input value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })} placeholder="Domain (optional)" className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-400" />
             </div>
             <div className="mt-5 flex gap-2">
-              <button onClick={add} disabled={saving} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-gray-300">
+              <button onClick={add} disabled={saving} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:bg-gray-300">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="h-4 w-4" /> Add</>}
               </button>
               <button onClick={() => setShowAdd(false)} className="rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-200">

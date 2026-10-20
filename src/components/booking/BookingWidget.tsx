@@ -6,7 +6,6 @@ import {
   MapPin,
   Navigation,
   User,
-  Phone,
   Mail,
   Baby,
   Banknote,
@@ -20,7 +19,6 @@ import {
   Users,
   Luggage,
   Backpack,
-  Car,
   Route,
   Clock,
   CalendarClock,
@@ -39,6 +37,8 @@ import { money, isValidPhone } from "@/lib/format";
 import { rememberCheckout, rememberedCheckout, forgetCheckout } from "@/lib/checkoutSession";
 import { cardPaymentsEnabled } from "@/lib/paymentMethods";
 import type { FareBreakdown, PaymentMethod } from "@/lib/types";
+import { Logo } from "@/components/Brand";
+import PhoneInput from "@/components/PhoneInput";
 
 interface Quote {
   category_id: string;
@@ -163,6 +163,8 @@ async function getRoute(j: Journey): Promise<{ km: number; min: number } | null>
     return null;
   }
 }
+
+const UNAVAILABLE = "That vehicle type is no longer available — please go back and choose another.";
 
 export default function BookingWidget({
   site = "main",
@@ -344,6 +346,8 @@ export default function BookingWidget({
   const timeReady = scheduleMode === "now" || !!scheduledAt;
   const canQuote = outReady && retReady && timeReady;
   const phoneValid = isValidPhone(whatsapp);
+  // Email is optional; if one is typed it must look like an address.
+  const emailOk = !email.trim() || emailValid(email);
 
   // Card is closed to the public until it is explicitly switched on. Staff
   // taking a phone booking keep it, because they collect that payment
@@ -436,7 +440,7 @@ export default function BookingWidget({
    * nothing behind. The customer comes back to /booking/complete.
    */
   const startCardPayment = async () => {
-    if (!selected || !name.trim() || !phoneValid || !emailValid(email)) return;
+    if (!selected || !phoneValid || !emailOk) return;
     setLeaving(true);
     setError(null);
     try {
@@ -449,9 +453,11 @@ export default function BookingWidget({
       if (!data?.ok || !data.url) {
         setLeaving(false);
         setError(
-          data?.error === "payments_not_configured" || data?.error === "card_disabled"
-            ? "Card payments aren't available right now — please choose Cash."
-            : "Could not start the payment. Please try again or choose Cash."
+          data?.error === "category_unavailable"
+            ? UNAVAILABLE
+            : data?.error === "payments_not_configured" || data?.error === "card_disabled"
+              ? "Card payments aren't available right now — please choose Cash."
+              : "Could not start the payment. Please try again or choose Cash."
         );
         return;
       }
@@ -464,7 +470,7 @@ export default function BookingWidget({
   };
 
   const submit = async () => {
-    if (!selected || !name.trim() || !phoneValid || !emailValid(email)) return;
+    if (!selected || !phoneValid || !emailOk) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -476,7 +482,7 @@ export default function BookingWidget({
       const data = await res.json();
       setSubmitting(false);
       if (!data?.ok || !data.outbound?.ok) {
-        setError("Booking failed. Please try again.");
+        setError(data?.error === "category_unavailable" ? UNAVAILABLE : "Booking failed. Please try again.");
         return;
       }
       forgetCheckout();
@@ -498,7 +504,7 @@ export default function BookingWidget({
   // Custom price only applies in staff/manual mode when a valid amount is entered.
   const customFare =
     manual && customPrice.trim() !== "" && Number.isFinite(Number(customPrice)) && Number(customPrice) >= 0
-      ? Number(customPrice)
+      ? Math.round(Number(customPrice)) // whole pounds, like every fare
       : null;
   const finalTotal = customFare ?? grandTotal;
 
@@ -523,10 +529,8 @@ export default function BookingWidget({
     >
       <div className="mx-auto w-full max-w-md">
         {!manual && (
-          <div className="mb-4 flex items-center gap-2.5 px-1">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500 shadow-sm shadow-brand-500/30">
-              <Car className="h-5 w-5 text-white" strokeWidth={2.3} />
-            </div>
+          <div className="mb-4 flex flex-col items-center gap-2 px-1">
+            <Logo height={48} className="h-auto w-[230px] max-w-full" />
             <span className="font-display text-lg font-bold text-ink-950">Book your ride</span>
           </div>
         )}
@@ -732,6 +736,14 @@ export default function BookingWidget({
                           </div>
                           <div className="min-w-0 flex-1">
                             <span className="font-semibold text-ink-950">{q.name}</span>
+                            {q.fare.fixed_route && (
+                              <span
+                                title={q.fare.fixed_route}
+                                className="ml-2 rounded-full bg-green-50 px-2 py-0.5 align-middle text-[10px] font-semibold uppercase text-green-700"
+                              >
+                                Fixed price
+                              </span>
+                            )}
                             <p className="truncate text-xs text-gray-500">
                               {hasReturnQuote
                                 ? `${money(q.outbound_total)} + ${money(q.return_total)} return`
@@ -788,15 +800,15 @@ export default function BookingWidget({
                 </button>
                 <h2 className="font-display text-xl font-bold text-ink-950">Your details</h2>
 
-                <Field icon={User} placeholder="Full name" value={name} onChange={setName} />
+                <Field icon={User} placeholder="Full name (optional)" value={name} onChange={setName} />
                 <div>
-                  <Field icon={Phone} placeholder="WhatsApp number" value={whatsapp} onChange={setWhatsapp} type="tel" />
+                  <PhoneInput placeholder="Mobile number" value={whatsapp} onChange={setWhatsapp} />
                   {whatsapp.trim() && !phoneValid && (
                     <p className="mt-1 pl-1 text-xs text-red-500">Please enter a valid phone number.</p>
                   )}
                 </div>
                 <div>
-                  <Field icon={Mail} placeholder="Email address" value={email} onChange={setEmail} type="email" />
+                  <Field icon={Mail} placeholder="Email (optional — for your confirmation)" value={email} onChange={setEmail} type="email" />
                   {email.trim() && !emailValid(email) && (
                     <p className="mt-1 pl-1 text-xs text-red-500">Please enter a valid email address.</p>
                   )}
@@ -974,7 +986,7 @@ export default function BookingWidget({
                 )}
 
                 <button
-                  disabled={submitting || leaving || !name.trim() || !phoneValid || !emailValid(email)}
+                  disabled={submitting || leaving || !phoneValid || !emailOk}
                   onClick={payment === "card" && !manual ? startCardPayment : submit}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-4 text-base font-bold text-white shadow-lg shadow-brand-500/30 transition-all hover:bg-brand-600 disabled:bg-gray-200 disabled:text-gray-400"
                 >
@@ -1001,7 +1013,7 @@ export default function BookingWidget({
         </div>
 
         {!manual && (
-          <p className="mt-4 text-center text-xs text-gray-400">Secured booking · Powered by TaxiFlow</p>
+          <p className="mt-4 text-center text-xs text-gray-400">Secured booking · Signature Transfers</p>
         )}
       </div>
     </main>

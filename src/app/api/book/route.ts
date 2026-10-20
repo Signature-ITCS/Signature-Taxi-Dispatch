@@ -5,7 +5,9 @@ import { getSessionProfile } from "@/lib/auth";
 import { rateLimit, clientIp } from "@/lib/rateLimit";
 import { splitFare } from "@/lib/fare";
 import {
+  normalizeBookingInput,
   validateBookingInput,
+  categoryBookable,
   createTrip,
   notifyBooking,
   type BookingInput,
@@ -28,10 +30,14 @@ export async function POST(req: Request) {
 
   const b = (await req.json().catch(() => ({}))) as Partial<BookingInput> & { custom_fare?: unknown };
 
+  await normalizeBookingInput(b);
   const invalid = validateBookingInput(b);
   if (invalid) return NextResponse.json({ ok: false, error: invalid });
 
   const input = b as BookingInput;
+  if (!(await categoryBookable(input.category_id))) {
+    return NextResponse.json({ ok: false, error: "category_unavailable" });
+  }
 
   // Resolved once: it decides both who may book a card ride and whose
   // hand-typed distance we are willing to believe.
@@ -62,7 +68,8 @@ export async function POST(req: Request) {
   const outboundId = created.outbound.booking_id;
   if (b.custom_fare != null && Number.isFinite(requestedFare) && requestedFare >= 0 && outboundId) {
     if (isStaff) {
-      overrideFare = requestedFare;
+      // Whole pounds, like every fare.
+      overrideFare = Math.round(requestedFare);
       const admin = createAdminClient();
       const returnId = created.return?.ok ? created.return.booking_id : null;
       if (returnId) {

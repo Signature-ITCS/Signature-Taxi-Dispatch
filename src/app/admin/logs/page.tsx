@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Loader2,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PageHeader from "@/components/admin/PageHeader";
+import Pagination, { usePageState } from "@/components/dashboard/Pagination";
 import { timeAgo, dateTime, cn } from "@/lib/format";
 
 interface Log {
@@ -29,7 +30,7 @@ interface Log {
 
 function iconFor(action: string) {
   if (action === "login") return { Icon: LogIn, tone: "bg-blue-50 text-blue-600" };
-  if (action.startsWith("dispatcher_added") || action.includes("added")) return { Icon: UserPlus, tone: "bg-emerald-50 text-emerald-600" };
+  if (action.startsWith("dispatcher_added") || action.includes("added")) return { Icon: UserPlus, tone: "bg-brand-50 text-brand-600" };
   if (action.includes("removed") || action.includes("delete")) return { Icon: UserMinus, tone: "bg-red-50 text-red-600" };
   if (action.startsWith("booking")) return { Icon: ClipboardList, tone: "bg-brand-50 text-brand-600" };
   if (action.startsWith("driver")) return { Icon: CarFront, tone: "bg-violet-50 text-violet-600" };
@@ -43,18 +44,28 @@ export default function LogsPage() {
   const supabase = createClient();
   const [logs, setLogs] = useState<Log[]>([]);
   const [loading, setLoading] = useState(true);
+  // Paged in the database — the full history stays reachable.
+  const { page, setPage, pageSize, setPageSize } = usePageState("activity-logs", 50);
+  const [total, setTotal] = useState(0);
+
+  const load = useCallback(async () => {
+    const { data, count } = await supabase
+      .from("activity_logs")
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range((page - 1) * pageSize, page * pageSize - 1);
+    setLogs((data as Log[]) ?? []);
+    setTotal(count ?? 0);
+    setLoading(false);
+  }, [supabase, page, pageSize]);
 
   useEffect(() => {
-    const load = async () => {
-      const { data } = await supabase
-        .from("activity_logs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(300);
-      setLogs((data as Log[]) ?? []);
-      setLoading(false);
-    };
     load();
+  }, [load]);
+
+  // New activity only matters on the first page.
+  useEffect(() => {
+    if (page !== 1) return;
     const ch = supabase
       .channel("activity_logs")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "activity_logs" }, () => load())
@@ -62,7 +73,7 @@ export default function LogsPage() {
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [supabase]);
+  }, [supabase, page, load]);
 
   return (
     <div>
@@ -71,7 +82,7 @@ export default function LogsPage() {
       <div className="px-5 pb-10 md:px-8">
         {loading ? (
           <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+            <Loader2 className="h-7 w-7 animate-spin text-brand-600" />
           </div>
         ) : logs.length === 0 ? (
           <p className="py-16 text-center text-sm text-gray-400">No activity yet.</p>
@@ -109,6 +120,14 @@ export default function LogsPage() {
             })}
           </div>
         )}
+        <Pagination
+          className="mt-4"
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPage={setPage}
+          onPageSize={setPageSize}
+        />
       </div>
     </div>
   );

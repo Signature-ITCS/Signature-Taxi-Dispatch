@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  Search,
   Loader2,
   Ban,
   Phone,
@@ -19,6 +20,7 @@ import { createClient } from "@/lib/supabase/client";
 import PageHeader from "@/components/admin/PageHeader";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import LoadError from "@/components/dashboard/LoadError";
+import Pagination, { usePageState } from "@/components/dashboard/Pagination";
 import SheetHandle from "@/components/dashboard/SheetHandle";
 import { cn, timeAgo, money, clock, dateTime, dateOnly } from "@/lib/format";
 import type { Customer, Booking } from "@/lib/types";
@@ -30,21 +32,37 @@ export default function CustomersPage() {
   const [detail, setDetail] = useState<Customer | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Paged and searched in the database — every customer stays reachable.
+  const { page, setPage, pageSize, setPageSize } = usePageState("customers", 25);
+  const [total, setTotal] = useState(0);
+  const [q, setQ] = useState("");
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(q.trim()), 300);
+    return () => clearTimeout(t);
+  }, [q]);
+  useEffect(() => setPage(1), [search, setPage]);
+
   const load = async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from("customers")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range((page - 1) * pageSize, page * pageSize - 1);
+    const t = search.replace(/[,()%*\\"]/g, " ").trim();
+    if (t) query = query.or(`full_name.ilike.%${t}%,whatsapp.ilike.%${t}%,email.ilike.%${t}%`);
+    const { data, error, count } = await query;
     // An empty list and a failed query look identical on screen — say which it is.
     if (error) console.error("[customers] load failed", error);
     setLoadError(error?.message ?? null);
     setCustomers((data as Customer[]) ?? []);
+    setTotal(count ?? 0);
     setLoading(false);
   };
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [page, pageSize, search]);
 
   const toggleBlock = async (c: Customer) => {
     await supabase.from("customers").update({ is_blocked: !c.is_blocked }).eq("id", c.id);
@@ -62,14 +80,23 @@ export default function CustomersPage() {
       )}
       {loading ? (
         <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+          <Loader2 className="h-7 w-7 animate-spin text-brand-600" />
         </div>
       ) : (
         <div className="px-5 pb-10 md:px-8">
+          <div className="relative mb-4">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search customers by name, phone or email…"
+              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-base outline-none focus:border-brand-400 md:text-sm"
+            />
+          </div>
           <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
             {customers.length === 0 && (
               <div className="py-12 text-center text-sm text-gray-400">
-                <Users className="mx-auto mb-2 h-8 w-8 text-gray-300" /> No customers yet
+                <Users className="mx-auto mb-2 h-8 w-8 text-gray-300" /> {search ? "No customer matches" : "No customers yet"}
               </div>
             )}
             {customers.map((c, i) => (
@@ -118,6 +145,14 @@ export default function CustomersPage() {
               </motion.div>
             ))}
           </div>
+          <Pagination
+            className="mt-4"
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPage={setPage}
+            onPageSize={setPageSize}
+          />
         </div>
       )}
 
@@ -223,7 +258,7 @@ function CustomerDetailModal({
         </p>
         {loading ? (
           <div className="flex h-24 items-center justify-center">
-            <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
+            <Loader2 className="h-5 w-5 animate-spin text-brand-600" />
           </div>
         ) : loadError ? (
           <LoadError what="this customer's bookings" detail={loadError} />
@@ -266,7 +301,7 @@ function CustomerDetailModal({
           className={cn(
             "mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-colors",
             customer.is_blocked
-              ? "bg-emerald-600 text-white hover:bg-emerald-700"
+              ? "bg-brand-600 text-white hover:bg-brand-700"
               : "border border-red-200 text-red-600 hover:bg-red-50"
           )}
         >

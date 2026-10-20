@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { getSessionProfile } from "@/lib/auth";
 import DispatchShell from "@/components/dispatch/DispatchShell";
+import { staffMetadata } from "@/lib/staffMetadata";
+
+export const metadata = staffMetadata;
 
 export default async function DispatchLayout({
   children,

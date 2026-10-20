@@ -2,6 +2,9 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const PROTECTED = ["/admin", "/dispatch"];
+// The driver app has its own sign-in page, inside its own area.
+const DRIVER_AREA = "/driver";
+const DRIVER_LOGIN = "/driver/login";
 
 /** Refreshes the auth session cookie and guards staff-only areas. */
 export async function updateSession(request: NextRequest) {
@@ -32,6 +35,14 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const needsAuth = PROTECTED.some((p) => path === p || path.startsWith(p + "/"));
+
+  const inDriverApp = (path === DRIVER_AREA || path.startsWith(DRIVER_AREA + "/")) && path !== DRIVER_LOGIN;
+  if (inDriverApp && !user) {
+    const url = request.nextUrl.clone();
+    url.pathname = DRIVER_LOGIN;
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
 
   if (needsAuth && !user) {
     const url = request.nextUrl.clone();

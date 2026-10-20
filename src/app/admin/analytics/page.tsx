@@ -84,7 +84,7 @@ export default function AnalyticsPage() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+        <Loader2 className="h-7 w-7 animate-spin text-brand-600" />
       </div>
     );
   }
@@ -216,7 +216,7 @@ function Kpi({
   tone: "emerald" | "blue" | "violet";
 }) {
   const tones = {
-    emerald: "bg-emerald-50 text-emerald-600",
+    emerald: "bg-brand-50 text-brand-600",
     blue: "bg-blue-50 text-blue-600",
     violet: "bg-violet-50 text-violet-600",
   };
@@ -251,7 +251,7 @@ function Card({
       className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
     >
       <h2 className="flex items-center gap-2 font-display text-sm font-bold text-ink-950">
-        <Icon className="h-4 w-4 text-emerald-600" /> {title}
+        <Icon className="h-4 w-4 text-brand-600" /> {title}
       </h2>
       {children}
     </motion.div>

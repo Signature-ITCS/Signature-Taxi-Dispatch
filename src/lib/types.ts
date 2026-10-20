@@ -4,6 +4,8 @@ export type UserRole = "driver" | "dispatcher" | "admin";
 export type DriverAvailability = "offline" | "online" | "on_trip";
 export type PaymentMethod = "cash" | "card";
 export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+/** Office-side status staff set by hand. Separate from the ride lifecycle (BookingStatus). */
+export type JobStatus = "processing" | "on_hold" | "completed" | "cancelled" | "refunded";
 export type ChargeType = "fixed" | "percentage";
 
 export type BookingStatus =
@@ -105,6 +107,14 @@ export interface FareBreakdown {
   extras: { name: string; amount: number; type: ChargeType }[];
   extras_total: number;
   minimum_fare?: number;
+  /** Set when a fixed area-to-area price was used, e.g. "Sheerness → Heathrow". */
+  fixed_route?: string;
+  fixed_price?: number;
+  /** Extra miles added by stops on a fixed route, and what they cost. */
+  detour_miles?: number;
+  detour_cost?: number;
+  /** Before rounding to whole pounds. */
+  unrounded?: number;
   total: number;
 }
 
@@ -134,6 +144,9 @@ export interface Booking {
   payment_method: PaymentMethod;
   payment_status: PaymentStatus;
   status: BookingStatus;
+  job_status: JobStatus;
+  /** Set when the customer paid online through Stripe. */
+  stripe_payment_intent_id: string | null;
   child_seat: boolean;
   passengers: number;
   suitcases: number;

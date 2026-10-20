@@ -26,7 +26,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const filter = url.searchParams.get("filter") ?? "all";
-  const limit = Math.min(Number(url.searchParams.get("limit")) || 200, 500);
+  const limit = Math.min(Number(url.searchParams.get("limit")) || 1000, 1000);
 
   let q = admin
     .from("payments")

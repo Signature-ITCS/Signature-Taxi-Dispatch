@@ -62,7 +62,7 @@ export async function POST(req: Request) {
         password,
         role,
         loginUrl: `${origin}/login`,
-        installUrl: `${origin}/install`,
+        installUrl: `${origin}/install/staff`,
         invitedBy: me.full_name || null,
       });
       emailed = await sendEmail({ to: email, subject: mail.subject, html: mail.html });

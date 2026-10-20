@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { getSessionProfile } from "@/lib/auth";
 import AdminShell from "@/components/admin/AdminShell";
+import { staffMetadata } from "@/lib/staffMetadata";
+
+export const metadata = staffMetadata;
 
 export default async function AdminLayout({
   children,

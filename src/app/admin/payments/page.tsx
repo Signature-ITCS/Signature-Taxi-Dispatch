@@ -13,6 +13,7 @@ import {
   Link2Off,
 } from "lucide-react";
 import PageHeader from "@/components/admin/PageHeader";
+import Pagination, { usePagedList } from "@/components/dashboard/Pagination";
 import { money, dateTime, timeAgo, cn } from "@/lib/format";
 
 interface Payment {
@@ -58,7 +59,7 @@ const FILTERS = [
 type FilterKey = (typeof FILTERS)[number]["key"];
 
 const STATUS_TONE: Record<string, string> = {
-  paid: "bg-emerald-50 text-emerald-700",
+  paid: "bg-green-50 text-green-700",
   refunded: "bg-gray-100 text-gray-600",
   failed: "bg-red-50 text-red-600",
   pending: "bg-amber-50 text-amber-700",
@@ -66,8 +67,10 @@ const STATUS_TONE: Record<string, string> = {
 
 export default function PaymentsPage() {
   const [rows, setRows] = useState<Payment[]>([]);
+  const { page, setPage, pageSize, setPageSize, pageItems, total } = usePagedList(rows, "payments", 25);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [filter, setFilter] = useState<FilterKey>("all");
+  useEffect(() => setPage(1), [filter, setPage]);
   const [loading, setLoading] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
 
@@ -99,7 +102,7 @@ export default function PaymentsPage() {
     <div>
       <PageHeader
         title="Payments"
-        subtitle="Every payment taken — card through Stripe, cash collected by drivers"
+        subtitle="Every payment taken — card through Stripe, cash collected by drivers. Refunds are made in the Stripe Dashboard."
         action={
           <button
             onClick={load}
@@ -127,7 +130,7 @@ export default function PaymentsPage() {
 
         {summary && (
           <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Tile label="Collected" value={money(summary.collected)} tone="text-emerald-600" />
+            <Tile label="Collected" value={money(summary.collected)} tone="text-green-600" />
             <Tile label="Refunded" value={money(summary.refunded)} tone="text-gray-500" />
             <Tile
               label="Needs review"
@@ -161,7 +164,7 @@ export default function PaymentsPage() {
 
         {loading ? (
           <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+            <Loader2 className="h-7 w-7 animate-spin text-brand-600" />
           </div>
         ) : rows.length === 0 ? (
           <p className="py-16 text-center text-sm text-gray-400">
@@ -169,10 +172,20 @@ export default function PaymentsPage() {
           </p>
         ) : (
           <div className="space-y-3">
-            {rows.map((p, i) => (
+            {pageItems.map((p, i) => (
               <PaymentCard key={p.id} p={p} index={i} />
             ))}
           </div>
+        )}
+        {rows.length > 0 && (
+          <Pagination
+            className="mt-4"
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPage={setPage}
+            onPageSize={setPageSize}
+          />
         )}
       </div>
     </div>
@@ -188,8 +201,11 @@ function Tile({ label, value, tone }: { label: string; value: string; tone: stri
   );
 }
 
-// Read-only: refunds are no longer issued from the app. They are done in the
-// Stripe Dashboard and the charge.refunded webhook keeps these rows in step.
+/**
+ * Refunds are deliberately not offered here: money goes back to customers only
+ * from the Stripe Dashboard, by whoever holds that login. Staff record the
+ * outcome on the booking (job status "Refunded").
+ */
 function PaymentCard({ p, index }: { p: Payment; index: number }) {
   const refundedSoFar = Number(p.amount_refunded ?? 0);
 
@@ -281,6 +297,7 @@ function PaymentCard({ p, index }: { p: Payment; index: number }) {
           {p.review_reason ?? p.failure_reason}
         </p>
       )}
+
     </motion.div>
   );
 }

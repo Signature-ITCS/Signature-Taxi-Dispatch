@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  Car,
   Phone,
   Star,
   Loader2,
@@ -20,6 +19,7 @@ import {
 } from "lucide-react";
 import { money, cn, dateTimeWithDay } from "@/lib/format";
 import InstallPWA from "@/components/InstallPWA";
+import { LogoMark } from "@/components/Brand";
 import type { BookingStatus, PaymentMethod } from "@/lib/types";
 
 interface Ride {
@@ -117,6 +117,17 @@ export default function TrackPage() {
     statusRef.current = data.status;
   }, [ref]);
 
+  // The thank-you email links to #review. The box only exists once the ride has
+  // loaded, so the browser can't jump there by itself — do it once it appears.
+  const scrolledToReview = useRef(false);
+  useEffect(() => {
+    if (scrolledToReview.current || ride?.status !== "completed" || window.location.hash !== "#review") return;
+    scrolledToReview.current = true;
+    requestAnimationFrame(() =>
+      document.getElementById("review")?.scrollIntoView({ behavior: "smooth", block: "start" })
+    );
+  }, [ride?.status]);
+
   // Poll every 5s; stop once the ride reaches a terminal state.
   useEffect(() => {
     fetchStatus();
@@ -166,9 +177,7 @@ export default function TrackPage() {
         {/* Header */}
         <div className="mb-4 flex items-center justify-between px-1 pt-2">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500">
-              <Car className="h-5 w-5 text-white" strokeWidth={2.3} />
-            </div>
+            <LogoMark size={36} />
             <div>
               <p className="font-display text-base font-bold leading-tight text-ink-950">Track your ride</p>
               <p className="font-mono text-xs text-gray-400">{ride.booking_number}</p>
@@ -326,7 +335,9 @@ export default function TrackPage() {
 
             {/* Rating */}
             {ride.status === "completed" && (
-              <RatingBox ref_={ride.booking_number} alreadyRated={ride.rated} onDone={fetchStatus} />
+              <div id="review" className="scroll-mt-4">
+                <RatingBox ref_={ride.booking_number} alreadyRated={ride.rated} onDone={fetchStatus} />
+              </div>
             )}
           </>
         )}
@@ -334,7 +345,7 @@ export default function TrackPage() {
         <InstallPWA />
 
         <p className="mt-5 flex items-center justify-center gap-1.5 text-center text-xs text-gray-400">
-          <Clock className="h-3 w-3" /> Updates automatically · TaxiFlow
+          <Clock className="h-3 w-3" /> Updates automatically · Signature Transfers
         </p>
       </div>
     </main>

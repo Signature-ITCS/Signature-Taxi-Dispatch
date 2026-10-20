@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import { BRAND } from "@/lib/brand";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -17,20 +18,19 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "TaxiFlow — Booking & Dispatch",
-  description: "Multi-website taxi booking and dispatch system",
+  title: `${BRAND.name} — Book a Taxi`,
+  description: `Book a ${BRAND.name} online — taxis and airport transfers, 24 hours a day.`,
+  applicationName: BRAND.name,
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [
-      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/icon.svg", type: "image/svg+xml" },
-    ],
+    icon: [{ url: "/favicon-32.png", sizes: "32x32", type: "image/png" }],
     apple: "/apple-touch-icon.png",
   },
+  appleWebApp: { title: BRAND.name, capable: true, statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f5b301",
+  themeColor: BRAND.colors.navy,
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

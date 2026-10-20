@@ -3,6 +3,7 @@
  * Uses table layout + inline styles so it renders in Gmail / Outlook / Apple Mail.
  */
 import { money } from "./format";
+import { BRAND } from "./brand";
 
 export interface BookingEmailData {
   bookingNumber: string;
@@ -26,8 +27,8 @@ export interface BookingEmailData {
   siteName?: string;
 }
 
-const BRAND = "#F5B301";
-const INK = "#0b0b0f";
+const ORANGE = BRAND.colors.orange;
+const INK = BRAND.colors.navy;
 
 function whenLabel(iso?: string | null): string {
   if (!iso) return "As soon as possible";
@@ -88,12 +89,10 @@ function shell(opts: { preheader: string; heading: string; sub: string; body: st
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:24px 12px;">
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #ececec;">
-        <tr><td style="background:${INK};padding:22px 28px;">
-          <table role="presentation" width="100%"><tr>
-            <td style="color:#ffffff;font-size:18px;font-weight:800;">🚕 ${escapeHtml(opts.footer)}</td>
-          </tr></table>
+        <tr><td style="background:#ffffff;padding:22px 28px 18px 28px;">
+          <span style="color:${INK};font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;">${escapeHtml(BRAND.name)}</span>
         </td></tr>
-        <tr><td style="height:4px;background:${BRAND};"></td></tr>
+        <tr><td style="height:4px;background:${ORANGE};"></td></tr>
         <tr><td style="padding:28px 28px 8px 28px;">
           <h1 style="margin:0 0 4px 0;color:${INK};font-size:22px;">${escapeHtml(opts.heading)}</h1>
           <p style="margin:0;color:#6b7280;font-size:14px;">${opts.sub}</p>
@@ -111,19 +110,19 @@ function shell(opts: { preheader: string; heading: string; sub: string; body: st
 function button(url: string, label: string): string {
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 4px 0;"><tr>
-      <td style="border-radius:12px;background:${BRAND};">
-        <a href="${escapeAttr(url)}" style="display:inline-block;padding:14px 26px;color:${INK};font-weight:700;font-size:15px;text-decoration:none;border-radius:12px;">${escapeHtml(label)} →</a>
+      <td style="border-radius:12px;background:${ORANGE};">
+        <a href="${escapeAttr(url)}" style="display:inline-block;padding:14px 26px;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;border-radius:12px;">${escapeHtml(label)} →</a>
       </td>
     </tr></table>`;
 }
 
 /** Customer-facing "Booking confirmed" email with a Track button. */
 export function customerConfirmationEmail(d: BookingEmailData): { subject: string; html: string } {
-  const site = d.siteName || "TaxiFlow";
+  const site = d.siteName || BRAND.name;
   const html = shell({
     preheader: `Your booking ${d.bookingNumber} is confirmed.`,
     heading: "Booking confirmed 🎉",
-    sub: `Thanks ${escapeHtml(d.customerName.split(" ")[0] || "there")}! We've got your ride and will assign a driver shortly.`,
+    sub: `Thanks ${escapeHtml(firstName(d.customerName))}! We've got your ride and will assign a driver shortly.`,
     footer: site,
     body: `
       ${detailsTable(d)}
@@ -154,7 +153,7 @@ export function staffAlertEmail(d: BookingEmailData, dispatchUrl?: string): { su
     preheader: `New booking ${d.bookingNumber} from ${d.customerName}.`,
     heading: "New booking received",
     sub: `A new ride has come in${d.siteName ? ` via ${escapeHtml(d.siteName)}` : ""}. Assign a driver from the dispatch board.`,
-    footer: "TaxiFlow Dispatch",
+    footer: BRAND.staffAppName,
     body: `
       ${detailsTable(d)}
       ${dispatchUrl ? `<div style="margin-top:22px;">${button(dispatchUrl, "Open dispatch board")}</div>` : ""}`,
@@ -180,7 +179,7 @@ export interface StaffWelcomeData {
   fullName: string;
   email: string;
   password: string;
-  role: "dispatcher" | "admin";
+  role: "dispatcher" | "admin" | "driver";
   loginUrl: string;
   installUrl: string;
   invitedBy?: string | null;
@@ -193,10 +192,11 @@ export interface StaffWelcomeData {
  * button (→ /install page, which triggers the PWA install prompt).
  */
 export function staffWelcomeEmail(d: StaffWelcomeData): { subject: string; html: string } {
-  const site = d.siteName || "TaxiFlow";
+  const site = d.siteName || BRAND.name;
   const first = escapeHtml(d.fullName.split(" ")[0] || "there");
-  const roleLabel = d.role === "admin" ? "Administrator" : "Dispatcher";
-  const area = d.role === "admin" ? "admin panel" : "dispatch board";
+  const roleLabel = d.role === "admin" ? "Administrator" : d.role === "driver" ? "Driver" : "Dispatcher";
+  const area = d.role === "admin" ? "admin panel" : d.role === "driver" ? "driver app" : "dispatch board";
+  const appName = d.role === "driver" ? BRAND.driverAppName : BRAND.staffAppName;
 
   const credBox = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;background:#fafafa;border:1px solid #ececec;border-radius:12px;">
@@ -229,7 +229,7 @@ export function staffWelcomeEmail(d: StaffWelcomeData): { subject: string; html:
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;">
       <tr><td style="padding:12px 0 0 0;border-top:1px solid #f0f0f0;">
         <p style="margin:0 0 4px 0;color:${INK};font-size:15px;font-weight:700;">Install the app 📲</p>
-        <p style="margin:0 0 8px 0;color:#6b7280;font-size:13px;line-height:1.5;">Add ${escapeHtml(site)} to your phone's home screen or your desktop so the ${area} opens like a normal app, full-screen and one tap away. Open the link below on the device you want to install it on, press <b>Install</b>, then sign in with the details above.</p>
+        <p style="margin:0 0 8px 0;color:#6b7280;font-size:13px;line-height:1.5;">Add the ${escapeHtml(appName)} app to your phone's home screen or your desktop so the ${area} opens like a normal app, full-screen and one tap away. Open the link below on the device you want to install it on, press <b>Install</b>, then sign in with the details above.</p>
         ${button(d.installUrl, "Install the app")}
       </td></tr>
     </table>`;
@@ -238,7 +238,7 @@ export function staffWelcomeEmail(d: StaffWelcomeData): { subject: string; html:
     preheader: `Your ${roleLabel.toLowerCase()} account for ${site} is ready — install the app to get started.`,
     heading: `Welcome aboard, ${first}! 👋`,
     sub: `${d.invitedBy ? `${escapeHtml(d.invitedBy)} has` : "We've"} created your ${roleLabel.toLowerCase()} account on ${escapeHtml(site)}. Here's everything you need to get started.`,
-    footer: `${site} Dispatch`,
+    footer: appName,
     body: `
       ${credBox}
       ${steps}
@@ -250,7 +250,7 @@ export function staffWelcomeEmail(d: StaffWelcomeData): { subject: string; html:
   return { subject: `Your ${site} ${roleLabel.toLowerCase()} account is ready`, html };
 }
 
-/** Dark secondary "install" button — used in the customer email where the amber "Track" button is the primary action. */
+/** Dark secondary "install" button — used in customer emails where the orange button is the primary action. */
 function installButton(url: string, label: string): string {
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 4px 0;"><tr>
@@ -311,7 +311,7 @@ export function paymentAlertEmail(d: PaymentAlertData): { subject: string; html:
     preheader: `${copy.subject} — ${money(d.amount)} · ${d.paymentIntentId}`,
     heading: copy.heading,
     sub: copy.sub,
-    footer: "TaxiFlow Payments",
+    footer: `${BRAND.name} Payments`,
     body: `
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
         ${row("Amount", money(d.amount), true)}
@@ -329,4 +329,110 @@ export function paymentAlertEmail(d: PaymentAlertData): { subject: string; html:
       }`,
   });
   return { subject: `${copy.subject} — ${money(d.amount)}`, html };
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/* After the ride                                                            */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+export interface ThankYouData {
+  customerName: string;
+  bookingNumber: string;
+  pickup: string;
+  dropoff: string;
+  /** Tracking page, scrolled to its star rating (#review). */
+  reviewUrl: string;
+  /** Customer app install page. */
+  installUrl: string;
+  /** Booking page, for the next ride. */
+  bookUrl: string;
+}
+
+/** Sent once a ride is marked completed: thanks, a review link and the app. */
+export function rideThankYouEmail(d: ThankYouData): { subject: string; html: string } {
+  const first = escapeHtml(firstName(d.customerName));
+  const html = shell({
+    preheader: `Thanks for riding with ${BRAND.name} — how did we do?`,
+    heading: `Thanks for riding with us, ${first}!`,
+    sub: `Your ride ${escapeHtml(d.bookingNumber)} is complete. We hope everything went smoothly.`,
+    footer: BRAND.name,
+    body: `
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+        ${row("From", escapeHtml(d.pickup))}
+        ${row("To", escapeHtml(d.dropoff))}
+      </table>
+      <div style="margin-top:22px;">
+        <p style="margin:0 0 2px 0;color:${INK};font-size:15px;font-weight:700;">How was your ride? ⭐</p>
+        <p style="margin:0 0 8px 0;color:#6b7280;font-size:13px;line-height:1.5;">
+          It takes ten seconds and helps us keep every journey a good one.
+        </p>
+        ${button(d.reviewUrl, "Rate your ride")}
+      </div>
+      <div style="margin-top:18px;padding-top:18px;border-top:1px solid #f0f0f0;">
+        <p style="margin:0 0 2px 0;color:${INK};font-size:14px;font-weight:600;">Book your next ride in one tap 📲</p>
+        <p style="margin:0 0 8px 0;color:#6b7280;font-size:13px;line-height:1.5;">
+          Add ${escapeHtml(BRAND.name)} to your phone's home screen. Open the link on your phone and press <b>Install</b>.
+        </p>
+        ${installButton(d.installUrl, "Download our app")}
+        <p style="margin:12px 0 0 0;font-size:13px;"><a href="${escapeAttr(d.bookUrl)}" style="color:${ORANGE};font-weight:600;text-decoration:none;">Or book online →</a></p>
+      </div>`,
+  });
+  return { subject: `Thanks for riding with ${BRAND.name}`, html };
+}
+
+/** "Sam" from "Sam Taylor"; "there" when no name was given ("Customer"). */
+function firstName(full: string): string {
+  const first = (full ?? "").trim().split(/\s+/)[0] ?? "";
+  return !first || first === "Customer" ? "there" : first;
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/* One-hour pickup reminder (staff)                                          */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+export interface ReminderJob {
+  bookingNumber: string;
+  scheduledAt: string;
+  customerName: string;
+  pickup: string;
+  dropoff: string;
+  driverName: string | null;
+  /** Driver has accepted ("On my way" pressed or accepted in the app). */
+  accepted: boolean;
+}
+
+/** "Starting within the hour" — flags jobs with no driver or not yet accepted. */
+export function upcomingReminderEmail(jobs: ReminderJob[], dispatchUrl: string): { subject: string; html: string } {
+  const noDriver = jobs.filter((j) => !j.driverName).length;
+  const time = (iso: string) =>
+    new Date(iso).toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
+  const rows = jobs
+    .map((j) => {
+      const state = !j.driverName
+        ? `<span style="color:#dc2626;font-weight:700;">No driver assigned</span>`
+        : j.accepted
+          ? `${escapeHtml(j.driverName)} · accepted`
+          : `${escapeHtml(j.driverName)} · <span style="color:#d95a04;font-weight:700;">not accepted yet</span>`;
+      return `
+        <tr><td style="padding:12px 0;border-bottom:1px solid #f0f0f0;">
+          <p style="margin:0;color:${INK};font-size:15px;font-weight:700;">${time(j.scheduledAt)} · ${escapeHtml(j.bookingNumber)}</p>
+          <p style="margin:2px 0 0 0;color:#374151;font-size:13px;">${escapeHtml(j.pickup)} → ${escapeHtml(j.dropoff)}</p>
+          <p style="margin:2px 0 0 0;color:#6b7280;font-size:13px;">${escapeHtml(j.customerName)} · ${state}</p>
+        </td></tr>`;
+    })
+    .join("");
+  const html = shell({
+    preheader: `${jobs.length} pickup${jobs.length === 1 ? "" : "s"} within the hour${noDriver ? ` — ${noDriver} with no driver` : ""}.`,
+    heading: "⏰ Pickups within the hour",
+    sub: noDriver
+      ? `${noDriver} of these ${noDriver === 1 ? "has" : "have"} no driver yet — assign one now.`
+      : "Every job below has a driver. Check the ones not accepted yet.",
+    footer: BRAND.staffAppName,
+    body: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${rows}</table>
+      <div style="margin-top:22px;">${button(dispatchUrl, "Open dispatch board")}</div>`,
+  });
+  return {
+    subject: `⏰ ${jobs.length} pickup${jobs.length === 1 ? "" : "s"} within the hour${noDriver ? ` (${noDriver} unassigned)` : ""}`,
+    html,
+  };
 }

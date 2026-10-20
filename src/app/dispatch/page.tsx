@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { useSearchParams } from "next/navigation";
 import {
   Radio,
+  Search,
   MapPin,
   Navigation,
   Clock,
@@ -12,6 +14,7 @@ import {
   Globe,
   UserCheck,
   Inbox,
+  AlarmClock,
   Banknote,
   CreditCard,
   Zap,
@@ -44,6 +47,7 @@ import BookingWidget from "@/components/booking/BookingWidget";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import ExternalBookingModal from "@/components/dashboard/ExternalBookingModal";
 import LoadError from "@/components/dashboard/LoadError";
+import { matchesDriver } from "@/components/dashboard/DriverSearch";
 import { money, timeAgo, cn, normalizeWhatsapp, isValidPhone, dateTimeFull, dateTime } from "@/lib/format";
 import type { Booking, Driver } from "@/lib/types";
 
@@ -75,6 +79,9 @@ function vehicleLabel(parts: { color?: string | null; make?: string | null; mode
 // holding a future/queued job should NOT flag them as busy.
 const BUSY_STATUSES = ["driver_arrived", "in_progress"];
 
+/** Pre-booked jobs move from Scheduled to Live this long before pickup. */
+const LIVE_WINDOW_MS = 60 * 60_000;
+
 const OPEN_STATUSES = [
   "pending",
   "assigned",
@@ -93,6 +100,7 @@ export default function DispatchPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [assigning, setAssigning] = useState<string | null>(null);
+  const [driverQuery, setDriverQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [showManual, setShowManual] = useState(false);
   const [showExternal, setShowExternal] = useState(false);
@@ -119,11 +127,33 @@ export default function DispatchPage() {
 
   const selected = jobs.find((j) => j.id === selectedId) ?? null;
 
+
+
+  // A pre-booked job stays in Scheduled — unassigned, assigned or accepted —
+  // until an hour before pickup, then moves to Live by itself (the reminder
+  // goes out at the same moment). A driver who arrives early takes it live.
   const isFutureScheduled = (j: JobRow) =>
-    !!j.scheduled_at && new Date(j.scheduled_at).getTime() > nowMs && j.status === "pending";
-  const scheduledJobs = jobs.filter(isFutureScheduled);
+    !!j.scheduled_at &&
+    new Date(j.scheduled_at).getTime() - nowMs > LIVE_WINDOW_MS &&
+    ["pending", "assigned", "accepted"].includes(j.status);
+  const scheduledJobs = jobs
+    .filter(isFutureScheduled)
+    .sort((a, b) => new Date(a.scheduled_at!).getTime() - new Date(b.scheduled_at!).getTime());
   const liveJobs = jobs.filter((j) => !isFutureScheduled(j));
   const displayJobs = view === "live" ? liveJobs : scheduledJobs;
+
+  // Opened from a notification: /dispatch?job=<id> selects that job (and the
+  // Scheduled tab if it is still a pre-booking).
+  const searchParams = useSearchParams();
+  const wantedJob = searchParams.get("job");
+  useEffect(() => {
+    if (!wantedJob || !nowMs) return;
+    const j = jobs.find((x) => x.id === wantedJob);
+    if (!j) return;
+    setSelectedId(j.id);
+    setView(isFutureScheduled(j) ? "scheduled" : "live");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantedJob, jobs.length > 0, nowMs > 0]);
 
   const beep = () => {
     try {
@@ -145,6 +175,22 @@ export default function DispatchPage() {
       /* ignore */
     }
   };
+
+  const soonSeen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!nowMs) return;
+    const ids = new Set(
+      jobs
+        .filter((j) => {
+          if (!j.scheduled_at || !["pending", "assigned", "accepted"].includes(j.status)) return false;
+          const t = new Date(j.scheduled_at).getTime();
+          return t > nowMs && t - nowMs <= 60 * 60_000;
+        })
+        .map((j) => j.id)
+    );
+    if (soonSeen.current && [...ids].some((id) => !soonSeen.current!.has(id))) beep();
+    soonSeen.current = ids;
+  }, [jobs, nowMs]);
 
   const loadJobs = useCallback(async () => {
     const { data, error } = await supabase
@@ -348,6 +394,13 @@ export default function DispatchPage() {
       .map((j) => j.driver_id)
   );
   const assignableDrivers = drivers.filter((d) => d.is_approved && !d.is_blocked);
+  // Searchable, best first: available app drivers, then drivers without the
+  // app, then offline, then busy — and the current driver always on top.
+  const rank = (d: Driver) =>
+    d.id === selected?.driver_id ? -1 : !d.profile_id ? 1 : d.availability === "online" ? 0 : d.availability === "offline" ? 2 : 3;
+  const pickerDrivers = assignableDrivers
+    .filter((d) => matchesDriver(d, driverQuery))
+    .sort((a, b) => rank(a) - rank(b) || a.full_name.localeCompare(b.full_name));
   const driverCount = assignableDrivers.length;
   const selectedDriver = selected?.driver_id ? drivers.find((d) => d.id === selected.driver_id) : null;
   // Whoever is on this job right now — one of ours, or an outside driver whose
@@ -388,6 +441,15 @@ export default function DispatchPage() {
   // Only rides that need attention now — future scheduled ones live in their own tab.
   const pendingCount = liveJobs.filter((j) => j.status === "pending").length;
 
+  // Pre-booked pickups starting within the hour that aren't on the road yet.
+  const soonJobs = jobs
+    .filter((j) => {
+      if (!j.scheduled_at || !["pending", "assigned", "accepted"].includes(j.status)) return false;
+      const t = new Date(j.scheduled_at).getTime();
+      return t > nowMs && t - nowMs <= 60 * 60_000;
+    })
+    .sort((a, b) => new Date(a.scheduled_at!).getTime() - new Date(b.scheduled_at!).getTime());
+
   return (
     // Phones: fill the viewport minus the bottom tab bar; desktop: full height.
     <div className="flex h-[calc(100dvh-64px-env(safe-area-inset-bottom))] flex-col bg-gray-50 md:h-screen">
@@ -424,6 +486,42 @@ export default function DispatchPage() {
           </button>
         </div>
       </header>
+
+      {/* Pickups within the hour — the one-hour reminder, live */}
+      {soonJobs.length > 0 && (
+        <div className="shrink-0 border-b border-brand-200 bg-brand-50 px-3 py-2 sm:px-5">
+          <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none]">
+            <span className="flex shrink-0 items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-brand-800">
+              <AlarmClock className="h-4 w-4" /> Within the hour
+            </span>
+            {soonJobs.map((j) => {
+              const mins = Math.max(0, Math.round((new Date(j.scheduled_at!).getTime() - nowMs) / 60_000));
+              const problem = !j.driver_id && !j.external_driver_name ? "No driver" : j.status === "assigned" ? "Not accepted" : null;
+              return (
+                <button
+                  key={j.id}
+                  onClick={() => setSelectedId(j.id)}
+                  className={cn(
+                    "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold",
+                    problem === "No driver"
+                      ? "border-red-300 bg-red-50 text-red-700"
+                      : problem
+                        ? "border-brand-300 bg-white text-brand-800"
+                        : "border-green-200 bg-white text-green-700"
+                  )}
+                >
+                  <span>{new Date(j.scheduled_at!).toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="text-gray-400">·</span>
+                  <span className="max-w-40 truncate">{j.pickup_address}</span>
+                  <span className="text-gray-400">·</span>
+                  <span>{problem ?? (j.driver?.full_name ?? "Driver ready")}</span>
+                  <span className="text-gray-400">({mins}m)</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex flex-1 items-center justify-center">
@@ -521,7 +619,7 @@ export default function DispatchPage() {
                     <span
                       className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
                       style={{
-                        backgroundColor: (j.source?.color ?? "#f5b301") + "20",
+                        backgroundColor: (j.source?.color ?? "#b07d12") + "20",
                         color: j.source?.color ?? "#b37a00",
                       }}
                     >
@@ -788,16 +886,35 @@ export default function DispatchPage() {
                   <Zap className="h-3.5 w-3.5 text-brand-500" /> {activeDriver ? "Reassign to" : "Assign a driver"}
                 </p>
 
+                {assignableDrivers.length > 0 && (
+                  <div className="relative mb-2">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input
+                      value={driverQuery}
+                      onChange={(e) => setDriverQuery(e.target.value)}
+                      placeholder={`Search ${assignableDrivers.length} drivers by name, area or phone…`}
+                      className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-base outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 sm:text-sm"
+                    />
+                  </div>
+                )}
+
                 {assignableDrivers.length === 0 ? (
                   <p className="py-6 text-center text-sm text-gray-400">
                     No drivers of your own yet — add them in Admin → Drivers, or send this job to an outside driver
                     below.
                   </p>
+                ) : pickerDrivers.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-gray-400">No driver matches “{driverQuery}”.</p>
                 ) : (
                   <div className="space-y-2">
-                    {assignableDrivers.map((d, i) => {
-                      const onTrip = busyElsewhere.has(d.id);
+                    {pickerDrivers.map((d, i) => {
                       const isCurrent = selectedDriver?.id === d.id;
+                      // Drivers with the app report their own status; a busy one
+                      // can't be given a second job. Drivers without the app work
+                      // as before (WhatsApp), with "On a trip" as a hint only.
+                      const usesApp = !!d.profile_id;
+                      const onTrip = busyElsewhere.has(d.id) || (usesApp && d.availability === "on_trip");
+                      const blocked = usesApp && onTrip && !isCurrent;
                       return (
                         <motion.div
                           key={d.id}
@@ -812,11 +929,20 @@ export default function DispatchPage() {
                           <div className="min-w-0 flex-1">
                             <p className="flex items-center gap-1.5">
                               <span className="truncate text-sm font-semibold text-ink-950">{d.full_name}</span>
-                              {onTrip && !isCurrent && (
+                              {onTrip && !isCurrent ? (
                                 <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600">
-                                  <Car className="h-2.5 w-2.5" /> On a trip
+                                  <Car className="h-2.5 w-2.5" /> {usesApp ? "Busy" : "On a trip"}
                                 </span>
-                              )}
+                              ) : usesApp ? (
+                                <span
+                                  className={cn(
+                                    "inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                                    d.availability === "offline" ? "bg-gray-100 text-gray-500" : "bg-green-50 text-green-700"
+                                  )}
+                                >
+                                  {d.availability === "offline" ? "Offline" : "Available"}
+                                </span>
+                              ) : null}
                             </p>
                             {d.service_area && (
                               <p className="flex items-center gap-1 truncate text-xs font-medium text-brand-700">
@@ -829,13 +955,16 @@ export default function DispatchPage() {
                           </div>
                           <button
                             onClick={() => assign(d.id)}
-                            disabled={assigning === d.id || isCurrent}
-                            className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400"
+                            disabled={assigning === d.id || isCurrent || blocked}
+                            title={blocked ? "Busy on another job" : undefined}
+                            className="rounded-lg bg-brand-500 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-600 disabled:bg-gray-200 disabled:text-gray-400"
                           >
                             {assigning === d.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : isCurrent ? (
                               "Assigned"
+                            ) : blocked ? (
+                              "Busy"
                             ) : selectedDriver ? (
                               "Switch"
                             ) : (
@@ -938,23 +1067,27 @@ export default function DispatchPage() {
 }
 
 function ManualBookingModal({ onClose }: { onClose: () => void }) {
+  // Closes only from the ✕ button: a stray click outside used to throw away a
+  // half-typed phone booking.
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        onClick={(e) => e.stopPropagation()}
-        className="min-h-full w-full overflow-hidden bg-white shadow-xl sm:my-6 sm:min-h-0 sm:max-w-md sm:rounded-2xl"
+        // overflow-clip (not hidden) so the sticky header with ✕ stays on screen while scrolling
+        className="min-h-full w-full overflow-clip bg-white shadow-xl sm:my-6 sm:min-h-0 sm:max-w-md sm:rounded-2xl"
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-4 py-3 sm:px-5 sm:py-4">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-gray-100 bg-white px-4 py-3 sm:px-5 sm:py-4">
           <div>
             <h3 className="font-display text-lg font-bold text-ink-950">New booking</h3>
             <p className="text-xs text-gray-400">Phone or walk-in — same flow as the customer</p>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            title="Close"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>

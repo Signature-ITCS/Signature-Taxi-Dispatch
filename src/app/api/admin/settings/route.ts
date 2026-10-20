@@ -36,6 +36,7 @@ export async function GET() {
     config: {
       email_from: (n.email_from as string) || process.env.EMAIL_FROM || "",
       sms_sender: (n.sms_sender as string) || process.env.COSMICSMS_SENDER || "",
+      reply_to: (n.reply_to as string) || "",
       timezone: c.timezone || "",
       booking_alert_emails: savedList ?? Array.from(new Set(staffEmails)),
       alert_emails_saved: savedList !== null,
@@ -64,6 +65,15 @@ export async function POST(req: Request) {
   const notif = { ...((notifRow?.value as Record<string, unknown>) ?? {}) };
   if (typeof b.email_from === "string") notif.email_from = b.email_from.trim();
   if (typeof b.sms_sender === "string") notif.sms_sender = b.sms_sender.trim();
+  // Where customer replies go. Kept as typed, minus anything that isn't an address.
+  if (typeof b.reply_to === "string") {
+    notif.reply_to = b.reply_to
+      .split(/[,;s]+/)
+      .map((e: string) => e.trim().toLowerCase())
+      .filter((e: string) => EMAIL_RE.test(e))
+      .slice(0, 5)
+      .join(", ");
+  }
   // Exact list of who gets the "New booking" alert. An empty list is valid
   // (nobody). Invalid / duplicate addresses are dropped rather than rejected.
   if (Array.isArray(b.booking_alert_emails)) {

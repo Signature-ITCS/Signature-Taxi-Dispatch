@@ -8,6 +8,7 @@
  */
 import { normalizeWhatsapp } from "./format";
 import { getConfigValue } from "./settings";
+import { BRAND } from "./brand";
 
 export async function smsEnabled(): Promise<boolean> {
   return Boolean(process.env.COSMICSMS_USERNAME && process.env.COSMICSMS_API_PASSWORD);
@@ -22,6 +23,16 @@ function escapeXml(s: string): string {
     .replace(/'/g, "&apos;");
 }
 
+/**
+ * Networks only deliver a text sender ID of up to 11 letters and digits — a
+ * name like "SIGNATURE TRANSFERS" is rejected outright. Strip it down to
+ * something that will be accepted, falling back to the brand's own.
+ */
+export function smsSenderId(configured: string | null | undefined): string {
+  const cleaned = String(configured ?? "").replace(/[^A-Za-z0-9]/g, "").slice(0, 11);
+  return cleaned.length >= 3 ? cleaned : BRAND.smsSender;
+}
+
 export async function sendSms(to: string, message: string): Promise<boolean> {
   const user = process.env.COSMICSMS_USERNAME;
   const pass = process.env.COSMICSMS_API_PASSWORD;
@@ -29,7 +40,9 @@ export async function sendSms(to: string, message: string): Promise<boolean> {
 
   const mobile = normalizeWhatsapp(to); // -> 447... international form
   if (!mobile) return false;
-  const sender = (await getConfigValue("notifications", "sms_sender", process.env.COSMICSMS_SENDER)) || "Taxi";
+  const sender = smsSenderId(
+    await getConfigValue("notifications", "sms_sender", process.env.COSMICSMS_SENDER)
+  );
 
   const auth = Buffer.from(`${user}:${pass}`).toString("base64");
   const xml =

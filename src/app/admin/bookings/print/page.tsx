@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Loader2, Printer, ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { money, dateTime, cn } from "@/lib/format";
-import type { BookingStatus } from "@/lib/types";
+import { fetchReportRows, filtersFromParams, fareOf, driverOf, type ReportRow } from "@/lib/bookingReport";
 
 /**
  * A printable bookings report.
@@ -17,23 +17,7 @@ import type { BookingStatus } from "@/lib/types";
  * does the rest, with nothing shipped to the browser to make it work.
  */
 
-interface Row {
-  id: string;
-  booking_number: string;
-  customer_name: string;
-  customer_whatsapp: string;
-  pickup_address: string;
-  dropoff_address: string;
-  status: BookingStatus;
-  payment_method: string;
-  payment_status: string;
-  estimated_fare: number | null;
-  final_fare: number | null;
-  external_provider: string | null;
-  scheduled_at: string | null;
-  created_at: string;
-  driver?: { full_name: string } | null;
-}
+type Row = ReportRow;
 
 export default function BookingsPrintPage() {
   return (
@@ -46,36 +30,20 @@ export default function BookingsPrintPage() {
 function Report() {
   const params = useSearchParams();
   const supabase = createClient();
-  const from = params.get("from") ?? "";
-  const to = params.get("to") ?? "";
-  const status = params.get("status") ?? "all";
+  const filters = filtersFromParams(new URLSearchParams(params.toString()));
+  const { from, to, status, payment } = filters;
+  const driverName = params.get("driver_name");
 
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const filterKey = params.toString();
   const load = useCallback(async () => {
-    let q = supabase
-      .from("bookings")
-      .select(
-        "id, booking_number, customer_name, customer_whatsapp, pickup_address, dropoff_address, status, payment_method, payment_status, estimated_fare, final_fare, external_provider, scheduled_at, created_at, driver:drivers(full_name)"
-      )
-      .order("created_at", { ascending: false })
-      .limit(2000);
-
-    // The report is about when rides happened, so it filters on the ride's own
-    // date — the scheduled time where there is one, otherwise when it was taken.
-    if (from) q = q.gte("created_at", new Date(`${from}T00:00:00`).toISOString());
-    if (to) q = q.lte("created_at", new Date(`${to}T23:59:59`).toISOString());
-    if (status !== "all") q = q.eq("status", status);
-
-    const { data, error: err } = await q;
-    if (err) {
-      setError(err.message);
-      setRows([]);
-      return;
-    }
-    setRows((data as unknown as Row[]) ?? []);
-  }, [supabase, from, to, status]);
+    const { rows: data, error: err } = await fetchReportRows(supabase, filtersFromParams(new URLSearchParams(filterKey)));
+    if (err) setError(err);
+    setRows(data);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterKey]);
 
   useEffect(() => {
     load();
@@ -91,8 +59,9 @@ function Report() {
 
   if (!rows) return <Centered>Loading bookings…</Centered>;
 
-  const fareOf = (r: Row) => Number(r.final_fare ?? r.estimated_fare ?? 0);
   const completed = rows.filter((r) => r.status === "completed");
+  const cashTotal = completed.filter((r) => r.payment_method === "cash").reduce((s, r) => s + fareOf(r), 0);
+  const cardTotal = completed.filter((r) => r.payment_method === "card").reduce((s, r) => s + fareOf(r), 0);
   const takings = completed.reduce((s, r) => s + fareOf(r), 0);
   const outstanding = rows
     .filter((r) => r.payment_status !== "paid" && r.status !== "cancelled")
@@ -134,6 +103,8 @@ function Report() {
         <p className="mt-0.5 text-sm text-gray-600">
           {rangeLabel}
           {status !== "all" && ` · ${status.replace("_", " ")} only`}
+          {payment !== "all" && ` · ${payment} jobs only`}
+          {driverName && ` · driver: ${driverName}`}
         </p>
         <p className="mt-0.5 text-xs text-gray-500">Generated {dateTime(new Date().toISOString())}</p>
       </div>
@@ -144,6 +115,8 @@ function Report() {
         <Tile label="Completed" value={String(completed.length)} />
         <Tile label="Completed takings" value={money(takings)} />
         <Tile label="Still owed" value={money(outstanding)} />
+        <Tile label="Cash (completed)" value={money(cashTotal)} />
+        <Tile label="Card (completed)" value={money(cardTotal)} />
       </div>
 
       {rows.length === 0 ? (
@@ -178,8 +151,7 @@ function Report() {
                   <span className="text-gray-500">→ {r.dropoff_address}</span>
                 </Td>
                 <Td>
-                  {r.driver?.full_name ??
-                    (r.external_provider ? <span className="italic">Outside job</span> : "—")}
+                  {driverOf(r) || "—"}
                 </Td>
                 <Td className="whitespace-nowrap capitalize">{r.status.replace("_", " ")}</Td>
                 <Td className="whitespace-nowrap capitalize">
@@ -197,7 +169,7 @@ function Report() {
       )}
 
       <p className="mt-6 text-[10px] text-gray-400">
-        TaxiFlow · {rows.length} booking{rows.length === 1 ? "" : "s"} · {rangeLabel}
+        Signature Transfers · {rows.length} booking{rows.length === 1 ? "" : "s"} · {rangeLabel}
       </p>
     </div>
   );
@@ -223,7 +195,7 @@ function Td({ children, className }: { children: React.ReactNode; className?: st
 function Centered({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm text-gray-500">
-      <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+      <Loader2 className="h-6 w-6 animate-spin text-brand-600" />
       {children}
     </div>
   );

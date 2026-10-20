@@ -2,7 +2,7 @@
 
 /* ============================================================
    TAXI — Design System (Tailwind v4)
-   Brand: Amber / Golden Yellow  •  Clean, modern, animated
+   Brand: Signature Transfers — logo orange on navy
    ============================================================ */
 
 @theme {
@@ -10,24 +10,24 @@
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-display: var(--font-jakarta), var(--font-inter), ui-sans-serif, sans-serif;
 
-  /* Brand — amber scale */
-  --color-brand-50: #fffbeb;
-  --color-brand-100: #fef3c7;
-  --color-brand-200: #fde68a;
-  --color-brand-300: #fcd34d;
-  --color-brand-400: #fbbf24;
-  --color-brand-500: #f5b301;
-  --color-brand-600: #d99700;
-  --color-brand-700: #b37a00;
-  --color-brand-800: #8c5f00;
-  --color-brand-900: #5c3f00;
+  /* Brand — orange from the logo ("24/7 TAXI LTD") */
+  --color-brand-50: #f9f6ee;
+  --color-brand-100: #f1e8d4;
+  --color-brand-200: #e3d0aa;
+  --color-brand-300: #d1b476;
+  --color-brand-400: #c09741;
+  --color-brand-500: #b07d12;
+  --color-brand-600: #9b6e10;
+  --color-brand-700: #805b0d;
+  --color-brand-800: #66490a;
+  --color-brand-900: #543c09;
 
-  /* Neutral ink (driver dark theme) */
-  --color-ink-950: #0b0b0f;
-  --color-ink-900: #14141b;
-  --color-ink-800: #1d1d27;
-  --color-ink-700: #2a2a38;
-  --color-ink-600: #3a3a4d;
+  /* Ink — navy from the logo outline */
+  --color-ink-950: #121820;
+  --color-ink-900: #1e242b;
+  --color-ink-800: #2c3139;
+  --color-ink-700: #363b41;
+  --color-ink-600: #464b51;
 
   /* Status colors */
   --color-success: #16a34a;
@@ -52,9 +52,9 @@
   50% { background-color: #ef4444; }
 }
 @keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgba(245, 179, 1, 0.5); }
-  70% { box-shadow: 0 0 0 16px rgba(245, 179, 1, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(245, 179, 1, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(242, 106, 10, 0.5); }
+  70% { box-shadow: 0 0 0 16px rgba(242, 106, 10, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(242, 106, 10, 0); }
 }
 @keyframes slide-up {
   from { opacity: 0; transform: translateY(16px); }
@@ -74,7 +74,7 @@ html { -webkit-tap-highlight-color: transparent; }
 body {
   font-family: var(--font-sans);
   background: #ffffff;
-  color: #14141b;
+  color: #121820;
 }
 
 /* Nice thin scrollbars for dashboards */
@@ -87,7 +87,7 @@ body {
 
 /* Utility: brand gradient text */
 .text-gradient-brand {
-  background: linear-gradient(135deg, #f5b301, #d99700);
+  background: linear-gradient(135deg, #ff8a33, #b07d12);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;

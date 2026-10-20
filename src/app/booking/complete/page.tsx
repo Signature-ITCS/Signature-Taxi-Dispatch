@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { CheckCircle2, Loader2, MapPin, CreditCard, XCircle, Car } from "lucide-react";
+import { CheckCircle2, Loader2, MapPin, CreditCard, XCircle } from "lucide-react";
+import { Logo } from "@/components/Brand";
 import InstallPWA from "@/components/InstallPWA";
 import { money } from "@/lib/format";
 import { forgetCheckout } from "@/lib/checkoutSession";
@@ -211,11 +212,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-brand-50/40 to-white p-4">
       <div className="w-full max-w-md">
-        <div className="mb-4 flex items-center justify-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500">
-            <Car className="h-5 w-5 text-white" strokeWidth={2.3} />
-          </div>
-          <span className="font-display text-base font-bold text-ink-950">TaxiFlow</span>
+        <div className="mb-4 flex justify-center">
+          <Logo height={44} className="h-auto w-[210px] max-w-full" />
         </div>
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">{children}</div>
       </div>

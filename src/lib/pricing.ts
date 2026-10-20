@@ -1,4 +1,4 @@
-import { callRpc } from "@/lib/supabaseRest";
+import { callRpcCompat } from "@/lib/supabaseRest";
 import { resolveLegDistance, type LegInput } from "@/lib/googleRoute";
 
 /**
@@ -35,13 +35,23 @@ async function legTotal(
   const resolved = await resolveLegDistance(leg, { trustClient });
   if (!resolved) return null;
   const { distance_km, duration_min } = resolved;
-  const { data } = await callRpc<QuoteResp>("quote_fares", {
-    p_api_key: apiKey,
-    p_distance_km: distance_km,
-    p_duration_min: duration_min,
-    p_route_text: leg.route_text ?? "",
-    ...(leg.scheduled_at ? { p_at: leg.scheduled_at } : {}),
-  });
+  const { data } = await callRpcCompat<QuoteResp>(
+    "quote_fares",
+    {
+      p_api_key: apiKey,
+      p_distance_km: distance_km,
+      p_duration_min: duration_min,
+      p_route_text: leg.route_text ?? "",
+      ...(leg.scheduled_at ? { p_at: leg.scheduled_at } : {}),
+    },
+    {
+      p_pickup_lat: leg.pickup_lat,
+      p_pickup_lng: leg.pickup_lng,
+      p_dropoff_lat: leg.dropoff_lat,
+      p_dropoff_lng: leg.dropoff_lng,
+      p_direct_km: resolved.direct_km,
+    }
+  );
   if (!data?.ok) return null;
   const q = data.quotes.find((r) => r.category_id === categoryId);
   if (!q) return null;

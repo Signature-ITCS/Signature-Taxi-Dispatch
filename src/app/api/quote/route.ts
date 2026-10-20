@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { callRpc } from "@/lib/supabaseRest";
+import { callRpcCompat } from "@/lib/supabaseRest";
 import { getWebsiteKey } from "@/lib/getWebsiteKey";
 import { resolveLegDistance, type LegInput } from "@/lib/googleRoute";
 import { rateLimit, clientIp } from "@/lib/rateLimit";
@@ -30,7 +30,8 @@ async function legQuotes(
   const resolved = await resolveLegDistance(leg);
   if (!resolved) return null;
   const { distance_km, duration_min } = resolved;
-  const { data } = await callRpc<{ ok: boolean; quotes: Quote[]; child_seat_price?: number }>(
+  // Coordinates let the database spot fixed area-to-area prices.
+  const { data } = await callRpcCompat<{ ok: boolean; quotes: Quote[]; child_seat_price?: number }>(
     "quote_fares",
     {
       p_api_key: key,
@@ -38,6 +39,13 @@ async function legQuotes(
       p_duration_min: duration_min,
       p_route_text: leg.route_text ?? "",
       ...(leg.scheduled_at ? { p_at: leg.scheduled_at } : {}),
+    },
+    {
+      p_pickup_lat: leg.pickup_lat,
+      p_pickup_lng: leg.pickup_lng,
+      p_dropoff_lat: leg.dropoff_lat,
+      p_dropoff_lng: leg.dropoff_lng,
+      p_direct_km: resolved.direct_km,
     }
   );
   return data?.ok ? { quotes: data.quotes, child_seat_price: data.child_seat_price ?? 0 } : null;
