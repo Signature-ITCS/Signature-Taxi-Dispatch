@@ -18,6 +18,7 @@ import {
   Navigation,
   Calculator,
   Shapes,
+  Moon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useLeaflet, createMap } from "@/lib/leafletMap";
@@ -51,6 +52,8 @@ interface Route {
   both_ways: boolean;
   prices: Record<string, number>;
   is_active: boolean;
+  /** Night rate / time-based charges are added on this route (db/2026-10-22_route_night_rate.sql). */
+  time_charges?: boolean;
 }
 type RouteDraft = Omit<Route, "id"> & { id: string | null };
 
@@ -63,6 +66,9 @@ export default function FixedPrices({ cats }: { cats: VehicleCategory[] }) {
   const [addExtras, setAddExtras] = useState(false);
   const [loading, setLoading] = useState(true);
   const [missingTables, setMissingTables] = useState(false);
+  // Has db/2026-10-22_route_night_rate.sql been run? Until then the per-route
+  // night-rate tick is hidden and never sent, so saving routes keeps working.
+  const [hasNightCol, setHasNightCol] = useState(false);
 
   // Drawing state
   const [editing, setEditing] = useState<{ id: string | null; name: string; color: string; points: LatLng[] } | null>(null);
@@ -75,11 +81,13 @@ export default function FixedPrices({ cats }: { cats: VehicleCategory[] }) {
   const [routeError, setRouteError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [z, r, s] = await Promise.all([
+    const [z, r, s, col] = await Promise.all([
       supabase.from("pricing_zones").select("*").order("sort_order").order("created_at"),
       supabase.from("fixed_routes").select("*").order("sort_order").order("created_at"),
       supabase.from("app_settings").select("value").eq("key", "fixed_prices").maybeSingle(),
+      supabase.from("fixed_routes").select("time_charges").limit(1),
     ]);
+    setHasNightCol(!col.error);
     if (z.error || r.error) {
       setMissingTables(true);
       setLoading(false);
@@ -137,7 +145,7 @@ export default function FixedPrices({ cats }: { cats: VehicleCategory[] }) {
   // ── Routes ──
   const newRoute = () => {
     setRouteError(null);
-    setDraft({ id: null, from_zone_id: zones[0]?.id ?? "", to_zone_id: zones[1]?.id ?? "", both_ways: true, prices: {}, is_active: true });
+    setDraft({ id: null, from_zone_id: zones[0]?.id ?? "", to_zone_id: zones[1]?.id ?? "", both_ways: true, prices: {}, is_active: true, time_charges: false });
   };
   const saveRoute = async () => {
     if (!draft) return;
@@ -149,7 +157,14 @@ export default function FixedPrices({ cats }: { cats: VehicleCategory[] }) {
     if (Object.keys(prices).length === 0) return setRouteError("Enter a price for at least one vehicle type.");
     setSavingRoute(true);
     setRouteError(null);
-    const row = { from_zone_id: draft.from_zone_id, to_zone_id: draft.to_zone_id, both_ways: draft.both_ways, prices, is_active: draft.is_active };
+    const row = {
+      from_zone_id: draft.from_zone_id,
+      to_zone_id: draft.to_zone_id,
+      both_ways: draft.both_ways,
+      prices,
+      is_active: draft.is_active,
+      ...(hasNightCol ? { time_charges: !!draft.time_charges } : {}),
+    };
     const { error } = draft.id
       ? await supabase.from("fixed_routes").update(row).eq("id", draft.id)
       : await supabase.from("fixed_routes").insert(row);
@@ -323,6 +338,7 @@ export default function FixedPrices({ cats }: { cats: VehicleCategory[] }) {
                 draft={draft}
                 zones={zones}
                 cats={cats}
+                nightAvailable={hasNightCol}
                 saving={savingRoute}
                 error={routeError}
                 onChange={setDraft}
@@ -358,6 +374,11 @@ export default function FixedPrices({ cats }: { cats: VehicleCategory[] }) {
                             {zoneName(r.from_zone_id)}
                             {r.both_ways ? <ArrowLeftRight className="h-3.5 w-3.5 text-brand-600" /> : <ArrowRight className="h-3.5 w-3.5 text-gray-400" />}
                             {zoneName(r.to_zone_id)}
+                            {r.time_charges && (
+                              <span title="Night rate / time-based charges apply" className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
+                                <Moon className="h-3 w-3" /> Night
+                              </span>
+                            )}
                           </span>
                         </td>
                         {cats.map((c) => (
@@ -393,8 +414,10 @@ export default function FixedPrices({ cats }: { cats: VehicleCategory[] }) {
             <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl bg-gray-50 px-3 py-2.5 text-sm text-gray-700">
               <input type="checkbox" checked={addExtras} onChange={(e) => saveAddExtras(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-600" />
               <span>
-                Also add <b>extra charges</b> (night rate, airport fee…) on top of fixed prices
-                <span className="block text-xs text-gray-400">Off: the fixed price is all-in (a child seat is still added when asked for).</span>
+                Also add <b>all extra charges</b> (night rate, airport fee…) on top of <b>every</b> fixed price
+                <span className="block text-xs text-gray-400">
+                  Off: fixed prices are all-in — except routes ticked <b>Night rate</b>, which get only time-based charges (e.g. 23:00–06:00). A child seat is always added when asked for.
+                </span>
               </span>
             </label>
           </div>
@@ -410,6 +433,7 @@ function RouteEditor({
   draft,
   zones,
   cats,
+  nightAvailable,
   saving,
   error,
   onChange,
@@ -419,6 +443,7 @@ function RouteEditor({
   draft: RouteDraft;
   zones: Zone[];
   cats: VehicleCategory[];
+  nightAvailable: boolean;
   saving: boolean;
   error: string | null;
   onChange: (d: RouteDraft) => void;
@@ -457,6 +482,22 @@ function RouteEditor({
         <input type="checkbox" checked={draft.both_ways} onChange={(e) => onChange({ ...draft, both_ways: e.target.checked })} className="h-4 w-4 accent-brand-600" />
         <b>Both ways</b> — the reverse journey and returns cost the same
       </label>
+      {nightAvailable && (
+        <label className="flex cursor-pointer items-start gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={!!draft.time_charges}
+            onChange={(e) => onChange({ ...draft, time_charges: e.target.checked })}
+            className="mt-0.5 h-4 w-4 accent-brand-600"
+          />
+          <span>
+            <b>Night rate / time-based charges apply</b> on this route
+            <span className="block text-xs text-gray-400">
+              e.g. a +20% charge for 23:00–06:00 in Extra charges is added at night. Airport and other non-time charges are not.
+            </span>
+          </span>
+        </label>
+      )}
       <div>
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Price per vehicle (whole £ — leave blank for per-mile)</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">

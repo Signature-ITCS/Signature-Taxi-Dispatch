@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Loader2, Save, Plus, Trash2, Check, X, Percent, PoundSterling, Users, Luggage, Backpack, Baby, Layers, Calculator, AlertTriangle } from "lucide-react";
+import { Loader2, Save, Plus, Trash2, Check, X, Pencil, Percent, PoundSterling, Users, Luggage, Backpack, Baby, Layers, Calculator, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PageHeader from "@/components/admin/PageHeader";
 import { carIcon } from "@/components/booking/CarIcon";
@@ -21,13 +21,17 @@ export default function PricingPage() {
   const [childSeatPrice, setChildSeatPrice] = useState(0);
   const [savingCsp, setSavingCsp] = useState(false);
   const [savedCsp, setSavedCsp] = useState(false);
+  // "Don't apply when the address contains …" needs db/2026-10-23_charge_exclusions.sql.
+  const [hasExclusions, setHasExclusions] = useState(false);
 
   const load = async () => {
-    const [{ data: c }, { data: r }, { data: setting }] = await Promise.all([
+    const [{ data: c }, { data: r }, { data: setting }, probe] = await Promise.all([
       supabase.from("vehicle_categories").select("*").order("sort_order"),
       supabase.from("pricing_rules").select("*").order("sort_order"),
       supabase.from("app_settings").select("value").eq("key", "child_seat_price").maybeSingle(),
+      supabase.from("pricing_rules").select("exclude_keywords").limit(1),
     ]);
+    setHasExclusions(!probe.error);
     setCats((c as VehicleCategory[]) ?? []);
     setRules((r as PricingRule[]) ?? []);
     setChildSeatPrice(Number((setting?.value as { amount?: number } | null)?.amount) || 0);
@@ -89,6 +93,21 @@ export default function PricingPage() {
 
   const toggleRule = async (r: PricingRule) => {
     await supabase.from("pricing_rules").update({ is_active: !r.is_active }).eq("id", r.id);
+    load();
+  };
+  const editExclusions = async (r: PricingRule) => {
+    const next = window.prompt(
+      `"${r.name}" is NOT added when the pickup, stop or drop-off address contains any of these words (comma-separated). Leave empty to apply to every journey it matches.`,
+      r.exclude_keywords ?? ""
+    );
+    if (next === null) return;
+    const value = next
+      .split(",")
+      .map((w) => w.trim().toLowerCase())
+      .filter(Boolean)
+      .join(", ");
+    await supabase.from("pricing_rules").update({ exclude_keywords: value || null }).eq("id", r.id);
+    await logActivity(supabase, "pricing_updated", `Extra charge ${r.name}: not for "${value || "—"}"`);
     load();
   };
   const deleteRule = async (id: string) => {
@@ -259,11 +278,24 @@ export default function PricingPage() {
                       <p className="text-xs text-gray-400">
                         {r.charge_type === "percentage" ? `+${r.amount}%` : `+£${Number(r.amount).toFixed(2)}`}
                         {r.keyword && ` · matches "${r.keyword}"`}
-                        {r.start_time && ` · ${r.start_time.slice(0, 5)}–${r.end_time?.slice(0, 5)}`}
+                        {r.start_time && ` · ${r.start_time.slice(0, 5)}–${r.end_time?.slice(0, 5)} (pickup time)`}
+                        {r.applies_all && " · every journey"}
                       </p>
+                      {r.exclude_keywords && (
+                        <p className="text-xs font-medium text-amber-700">Not for addresses with: {r.exclude_keywords}</p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {hasExclusions && (
+                      <button
+                        onClick={() => editExclusions(r)}
+                        title="Choose journeys this charge is not added to (e.g. airport)"
+                        className="rounded-lg p-2 text-gray-300 hover:bg-gray-100 hover:text-ink-950"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    )}
                     <button
                       onClick={() => toggleRule(r)}
                       className={cn(
@@ -284,7 +316,7 @@ export default function PricingPage() {
                   </div>
                 </div>
               ))}
-              <AddRule onAdded={load} />
+              <AddRule onAdded={load} hasExclusions={hasExclusions} />
             </div>
           </section>
         </div>
@@ -677,29 +709,68 @@ function FareCalculator({ cats }: { cats: VehicleCategory[] }) {
   );
 }
 
-function AddRule({ onAdded }: { onAdded: () => void }) {
+const AIRPORT_WORDS = "airport, heathrow, gatwick, stansted";
+
+function AddRule({ onAdded, hasExclusions }: { onAdded: () => void; hasExclusions: boolean }) {
   const supabase = createClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [type, setType] = useState<"fixed" | "percentage">("fixed");
   const [amount, setAmount] = useState("");
   const [keyword, setKeyword] = useState("");
+  // When the charge applies. One condition per charge: the pricing engine treats
+  // a keyword and a time window as either/or, so the form never sets both.
+  const [when, setWhen] = useState<"keyword" | "time" | "always">("keyword");
+  const [from, setFrom] = useState("23:00");
+  const [to, setTo] = useState("06:00");
+  // Skip the charge when the addresses contain any of these words.
+  const [exclude, setExclude] = useState("");
+  const pickWhen = (w: "keyword" | "time" | "always") => {
+    setWhen(w);
+    // A night rate usually shouldn't hit airport runs — suggest it, editable.
+    if (w === "time" && !exclude) setExclude(AIRPORT_WORDS);
+  };
   const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   const add = async () => {
-    if (!name.trim() || !amount) return;
+    if (!name.trim() || !amount) return setErr("Enter a name and an amount.");
+    if (when === "keyword" && !keyword.trim()) return setErr("Enter the address keyword (e.g. airport).");
+    if (when === "time" && (!from || !to || from === to)) return setErr("Choose a start and an end time.");
+    setErr(null);
     setSaving(true);
-    await supabase.from("pricing_rules").insert({
-      name,
+    const { error } = await supabase.from("pricing_rules").insert({
+      name: name.trim(),
       charge_type: type,
       amount: Number(amount),
-      keyword: keyword.trim() || null,
+      keyword: when === "keyword" ? keyword.trim() : null,
+      start_time: when === "time" ? from : null,
+      end_time: when === "time" ? to : null,
+      applies_all: when === "always",
       is_active: true,
+      ...(hasExclusions
+        ? {
+            exclude_keywords:
+              exclude
+                .split(",")
+                .map((w) => w.trim().toLowerCase())
+                .filter(Boolean)
+                .join(", ") || null,
+          }
+        : {}),
     });
     setSaving(false);
+    if (error) return setErr("Could not save the charge. Please try again.");
+    await logActivity(
+      supabase,
+      "pricing_updated",
+      `Added extra charge ${name.trim()} (${type === "percentage" ? `+${amount}%` : `+£${amount}`}${when === "time" ? `, ${from}–${to}` : when === "keyword" ? `, "${keyword.trim()}"` : ", every journey"})`
+    );
     setName("");
     setAmount("");
     setKeyword("");
+    setWhen("keyword");
+    setExclude("");
     setOpen(false);
     onAdded();
   };
@@ -739,13 +810,56 @@ function AddRule({ onAdded }: { onAdded: () => void }) {
           placeholder="Amount"
           className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400"
         />
-        <input
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          placeholder="Address keyword (optional, e.g. airport)"
-          className="col-span-2 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400"
-        />
+        <label className="col-span-2 block">
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">When does it apply?</span>
+          <select
+            value={when}
+            onChange={(e) => pickWhen(e.target.value as "keyword" | "time" | "always")}
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400"
+          >
+            <option value="keyword">When the address contains a word (e.g. airport)</option>
+            <option value="time">Between two times (e.g. night rate)</option>
+            <option value="always">Every journey</option>
+          </select>
+        </label>
+        {when === "keyword" && (
+          <input
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder="Address keyword, e.g. airport"
+            className="col-span-2 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400"
+          />
+        )}
+        {when === "time" && (
+          <>
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">From</span>
+              <input type="time" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400" />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">To</span>
+              <input type="time" value={to} onChange={(e) => setTo(e.target.value)} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400" />
+            </label>
+            <p className="col-span-2 text-[11px] leading-snug text-gray-400">
+              Goes by the pickup time (UK time). Can run past midnight, e.g. 23:00 → 06:00. A percentage is of the fare before other extras.
+            </p>
+          </>
+        )}
+        {hasExclusions && (
+          <label className="col-span-2 block">
+            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              Don&apos;t apply when the address contains (optional)
+            </span>
+            <input
+              value={exclude}
+              onChange={(e) => setExclude(e.target.value)}
+              placeholder="e.g. airport, heathrow, gatwick, stansted"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400"
+            />
+          </label>
+        )}
       </div>
+      {err && <p className="text-xs text-red-600">{err}</p>}
       <div className="flex gap-2">
         <button onClick={add} disabled={saving} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="h-4 w-4" /> Add</>}

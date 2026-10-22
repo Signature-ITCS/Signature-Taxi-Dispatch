@@ -211,6 +211,8 @@ export interface PricingRule {
   category_id: string | null;
   is_active: boolean;
   sort_order: number;
+  /** Comma-separated words; the charge is skipped when any appears in the addresses (db/2026-10-23_charge_exclusions.sql). */
+  exclude_keywords?: string | null;
 }
 
 export interface Profile {
