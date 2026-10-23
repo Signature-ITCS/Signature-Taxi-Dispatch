@@ -4213,6 +4213,21 @@ begin
   end if;
 end $$;
 
+-- …and only the car class's own company's extra charges (airport, night rate).
+-- A separate step so a database that already ran the one above gets it too.
+do $$
+declare
+  sig regprocedure := 'public.estimate_fare(uuid, numeric, numeric, text, text, timestamptz, double precision, double precision, double precision, double precision, numeric)'::regprocedure;
+  d text := pg_get_functiondef(sig);
+begin
+  if d !~ 'from pricing_rules\s+where company_id = c\.company_id' then
+    if d !~ 'from pricing_rules\s+where is_active' then
+      raise exception 'estimate_fare changed shape (extra-charges lookup not found) — nothing was changed';
+    end if;
+    execute regexp_replace(d, 'from pricing_rules(\s+)where is_active', 'from pricing_rules\1where company_id = c.company_id and is_active', 'g');
+  end if;
+end $$;
+
 -- Fixed routes: only the car class's own company's areas.
 create or replace function public.find_fixed_route(
   p_category_id uuid,
@@ -4505,63 +4520,63 @@ begin
   ] loop
     execute format(
       'create policy "company_staff_all" on public.%I for all to authenticated
-         using (company_id = current_company_id() and is_staff())
-         with check (company_id = current_company_id() and is_staff())', t);
+         using (company_id = (select current_company_id()) and (select is_staff()))
+         with check (company_id = (select current_company_id()) and (select is_staff()))', t);
   end loop;
 end $$;
 
 -- Read-only for staff.
 create policy "company_staff_read" on public.activity_logs for select to authenticated
-  using (company_id = current_company_id() and is_staff());
+  using (company_id = (select current_company_id()) and (select is_staff()));
 create policy "company_staff_read" on public.driver_locations for select to authenticated
-  using (company_id = current_company_id() and is_staff());
+  using (company_id = (select current_company_id()) and (select is_staff()));
 create policy "company_staff_read" on public.staff_notifications for select to authenticated
-  using (company_id = current_company_id() and is_staff());
+  using (company_id = (select current_company_id()) and (select is_staff()));
 
 -- Anyone in the company (drivers too) may read its car classes and settings.
 create policy "company_member_read" on public.vehicle_categories for select to authenticated
-  using (company_id = current_company_id());
+  using (company_id = (select current_company_id()));
 create policy "company_member_read" on public.app_settings for select to authenticated
-  using (company_id = current_company_id());
+  using (company_id = (select current_company_id()));
 
 -- Drivers: their own record, jobs, car, ratings, cash and the job history.
 create policy "driver_self_read" on public.drivers for select to authenticated
-  using (profile_id = auth.uid() and company_id = current_company_id());
+  using (profile_id = (select auth.uid()) and company_id = (select current_company_id()));
 create policy "driver_jobs_read" on public.bookings for select to authenticated
-  using (driver_id is not null and driver_id = current_driver_id());
+  using (driver_id is not null and driver_id = (select current_driver_id()));
 create policy "driver_vehicle_read" on public.vehicles for select to authenticated
-  using (driver_id = current_driver_id());
+  using (driver_id = (select current_driver_id()));
 create policy "driver_ratings_read" on public.ratings for select to authenticated
-  using (driver_id = current_driver_id());
+  using (driver_id = (select current_driver_id()));
 create policy "driver_cash_read" on public.cash_settlements for select to authenticated
-  using (driver_id = current_driver_id());
+  using (driver_id = (select current_driver_id()));
 create policy "driver_payments_read" on public.payments for select to authenticated
-  using (booking_id in (select id from bookings where driver_id = current_driver_id()));
+  using (booking_id in (select id from bookings where driver_id = (select current_driver_id())));
 create policy "driver_events_read" on public.ride_events for select to authenticated
-  using (booking_id in (select id from bookings where driver_id = current_driver_id()));
+  using (booking_id in (select id from bookings where driver_id = (select current_driver_id())));
 
 -- Staff logins: admins manage their own company's; everyone can read their own.
 create policy "company_admin_all" on public.profiles for all to authenticated
-  using (company_id = current_company_id() and is_admin())
-  with check (company_id = current_company_id() and is_admin());
+  using (company_id = (select current_company_id()) and (select is_admin()))
+  with check (company_id = (select current_company_id()) and (select is_admin()));
 create policy "company_staff_read" on public.profiles for select to authenticated
-  using (company_id = current_company_id() and is_staff());
+  using (company_id = (select current_company_id()) and (select is_staff()));
 create policy "self_read" on public.profiles for select to authenticated
-  using (id = auth.uid());
+  using (id = (select auth.uid()));
 create policy "self_update" on public.profiles for update to authenticated
-  using (id = auth.uid()) with check (id = auth.uid());
+  using (id = (select auth.uid())) with check (id = (select auth.uid()));
 
 -- Their own company row (name, plan, status) — read only.
 create policy "own_company_read" on public.companies for select to authenticated
-  using (id = (select company_id from profiles where id = auth.uid()));
+  using (id = (select company_id from profiles where id = (select auth.uid())));
 create policy "public_plans_read" on public.plans for select to anon, authenticated
   using (is_active and is_public);
 create policy "company_staff_read" on public.setup_requests for select to authenticated
-  using (company_id = current_company_id() and is_staff());
+  using (company_id = (select current_company_id()) and (select is_staff()));
 create policy "company_staff_read" on public.restore_requests for select to authenticated
-  using (company_id = current_company_id() and is_staff());
+  using (company_id = (select current_company_id()) and (select is_staff()));
 create policy "company_staff_read" on public.company_backups for select to authenticated
-  using (company_id = current_company_id() and is_admin());
+  using (company_id = (select current_company_id()) and (select is_admin()));
 
 -- checkout_drafts, stripe_events, push_subscriptions, secrets, platform_*:
 -- no policies on purpose — only the app's server (service role) may touch them.
