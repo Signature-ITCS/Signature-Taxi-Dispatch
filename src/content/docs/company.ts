@@ -223,9 +223,9 @@ You need two things from Stripe: a **secret key** and a **webhook signing secret
         body: `The webhook is how Stripe tells your booking system that a payment went through — even if the customer closes their phone straight after paying.
 
 1. In **Admin → Settings → Card payments**, press **Copy** next to the webhook address. It looks like \`https://…/api/webhooks/stripe/<your id>\`.
-2. In Stripe go to **Developers → Webhooks → Add endpoint** (or **Add destination**).
-3. Paste the address into **Endpoint URL**.
-4. Under **Select events**, tick these seven:
+2. In Stripe go to **Developers → Webhooks → Add destination** (older accounts: **Add endpoint**).
+3. **Event destination scope:** choose **Your account** (not Connected accounts). **Payload style:** leave **Snapshot**. **API version:** leave the one shown.
+4. Under **Events**, search for each of these seven and tick it (don't use "Select all") — the **Selected events** tab should then show 7:
    - \`checkout.session.completed\`
    - \`checkout.session.expired\`
    - \`payment_intent.succeeded\`
@@ -233,9 +233,10 @@ You need two things from Stripe: a **secret key** and a **webhook signing secret
    - \`charge.refunded\`
    - \`charge.dispute.created\`
    - \`charge.dispute.closed\`
-5. Press **Add endpoint**.
-6. On the endpoint's page, under **Signing secret**, press **Reveal** and copy it — it starts \`whsec_\`.
-7. Paste it into **Webhook signing secret** in your Settings.
+5. Press **Continue**, choose **Webhook endpoint**, press **Continue**.
+6. Paste the address into **Endpoint URL**, give it a name if you like, and press **Create destination**.
+7. On the destination's page, under **Signing secret**, press **Reveal** and copy it — it starts \`whsec_\`.
+8. Paste it into **Webhook signing secret** in your Settings and press **Save**.
 
 > Test mode and live mode have **separate** keys and webhooks. When you switch to live, repeat steps 2 and 3 in live mode.`,
       },

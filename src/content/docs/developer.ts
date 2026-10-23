@@ -133,7 +133,7 @@ After changing a price press **Sync to Stripe**: it creates the product and a ne
         id: "webhook",
         title: "2. Webhook",
         body: `1. Copy the address shown in Platform settings (\`…/api/platform/stripe-webhook\`).
-2. Stripe → **Developers → Webhooks → Add endpoint**, paste it, and select:
+2. Stripe → **Developers → Webhooks → Add destination**. Scope **Your account**, payload **Snapshot**, API version as shown. Search and tick these five (not "Select all"), then **Continue** → **Webhook endpoint** → **Continue** → paste the address as **Endpoint URL** → **Create destination**:
    - \`checkout.session.completed\`
    - \`customer.subscription.created\`
    - \`customer.subscription.updated\`
