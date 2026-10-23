@@ -9,8 +9,17 @@ import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
  *
  * Format: "v1:<iv>:<tag>:<ciphertext>", each part base64.
  */
+/** The variable as pasted, forgiving quotes or a "SECRETS_ENCRYPTION_KEY=" prefix left in. */
+function rawKey(): string {
+  return (process.env.SECRETS_ENCRYPTION_KEY ?? "")
+    .trim()
+    .replace(/^SECRETS_ENCRYPTION_KEY\s*=\s*/, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
+}
+
 function encryptionKey(): Buffer {
-  const raw = process.env.SECRETS_ENCRYPTION_KEY?.trim();
+  const raw = rawKey();
   if (!raw) throw new Error("SECRETS_ENCRYPTION_KEY is not set");
   const key = Buffer.from(raw, "base64");
   if (key.length !== 32) throw new Error("SECRETS_ENCRYPTION_KEY must be 32 bytes, base64-encoded");
@@ -24,6 +33,23 @@ export function encryptionConfigured(): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * What is wrong with the encryption key, in words safe to show the platform
+ * owner (lengths only — never the value). Null when it is fine.
+ */
+export function encryptionProblem(): string | null {
+  const raw = rawKey();
+  if (!raw) return "SECRETS_ENCRYPTION_KEY is not set on this deployment. Add it in Vercel → Settings → Environment Variables (tick Production), then redeploy.";
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(raw)) {
+    return `SECRETS_ENCRYPTION_KEY is set (${raw.length} characters) but contains characters that aren't part of the key — re-copy only the value (44 characters, usually ending in "="), with no spaces.`;
+  }
+  const bytes = Buffer.from(raw, "base64").length;
+  if (bytes !== 32) {
+    return `SECRETS_ENCRYPTION_KEY is set but has ${raw.length} characters (it should have 44). Re-copy the whole value, then redeploy.`;
+  }
+  return null;
 }
 
 export function encryptSecret(plain: string): string {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getPlatformAdmin, audit } from "@/lib/tenant";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PLATFORM_SECRETS, secretStatus, setSecret } from "@/lib/secrets";
-import { encryptionConfigured } from "@/lib/crypto";
+import { encryptionConfigured, encryptionProblem } from "@/lib/crypto";
 import { getServices } from "@/lib/services";
 import { siteOrigin } from "@/lib/provision";
 
@@ -22,6 +22,7 @@ export async function GET(req: Request) {
     services: await getServices(),
     secrets: await secretStatus(null),
     encryption_ready: encryptionConfigured(),
+    encryption_problem: encryptionProblem(),
     env_fallbacks: {
       stripe_secret_key: !!process.env.STRIPE_SECRET_KEY,
       stripe_webhook_secret: !!process.env.STRIPE_WEBHOOK_SECRET,
