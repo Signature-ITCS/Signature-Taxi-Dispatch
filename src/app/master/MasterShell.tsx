@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Building2, Tags, LifeBuoy, Settings, ScrollText, LogOut, Crown } from "lucide-react";
+import { LayoutDashboard, Building2, Tags, LifeBuoy, Settings, ScrollText, LogOut, Crown, BookOpen } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 const NAV = [
@@ -12,6 +12,7 @@ const NAV = [
   { href: "/master/requests", label: "Requests", icon: LifeBuoy },
   { href: "/master/settings", label: "Platform settings", icon: Settings },
   { href: "/master/audit", label: "Audit log", icon: ScrollText },
+  { href: "/documentation", label: "Documentation", icon: BookOpen },
 ];
 
 export default function MasterShell({ platformName, email, children }: { platformName: string; email: string; children: React.ReactNode }) {

@@ -1,5 +1,6 @@
 "use client";
 
+import HelpLink from "@/components/docs/HelpLink";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Loader2, Plus, X, ExternalLink, Mail, History, Trash2, DatabaseBackup } from "lucide-react";
@@ -83,7 +84,7 @@ function Companies() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-2xl font-bold text-ink-950">Companies</h1>
+        <h1 className="flex items-center gap-3 font-display text-2xl font-bold text-ink-950">Companies <HelpLink to="master-dashboard#companies" /></h1>
         <div className="flex gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className="rounded-xl border border-gray-200 px-3 py-2 text-sm" />
           <button onClick={() => setCreating(true)} className="flex items-center gap-1 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white">

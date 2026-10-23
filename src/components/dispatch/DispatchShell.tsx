@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Radio, ClipboardList, CarFront, Users, LogOut, Map as MapIcon, CalendarDays } from "lucide-react";
+import { Radio, ClipboardList, CarFront, Users, LogOut, Map as MapIcon, CalendarDays, BookOpen } from "lucide-react";
 import SignOutButton from "@/components/dashboard/SignOutButton";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/format";
@@ -18,6 +18,7 @@ const NAV = [
   { href: "/dispatch/bookings", label: "Bookings", short: "Bookings", icon: ClipboardList },
   { href: "/dispatch/drivers", label: "Drivers", short: "Drivers", icon: CarFront },
   { href: "/dispatch/customers", label: "Customers", short: "Customers", icon: Users },
+  { href: "/documentation/dispatch-board", label: "Help", short: "Help", icon: BookOpen },
 ];
 
 export default function DispatchShell({

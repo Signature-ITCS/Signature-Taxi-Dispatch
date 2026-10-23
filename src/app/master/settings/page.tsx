@@ -1,5 +1,6 @@
 "use client";
 
+import HelpLink from "@/components/docs/HelpLink";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Save, Copy, Check, AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { SecretInput, useSecretFields, type SecretStatus } from "@/components/SecretInput";
@@ -78,7 +79,7 @@ export default function PlatformSettingsPage() {
 
   return (
     <div className="max-w-3xl space-y-5 pb-16">
-      <h1 className="font-display text-2xl font-bold text-ink-950">Platform settings</h1>
+      <h1 className="flex items-center gap-3 font-display text-2xl font-bold text-ink-950">Platform settings <HelpLink to="platform-setup#env" /></h1>
       {msg && <p className={`rounded-xl p-3 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{msg.text}</p>}
       {!d.encryption_ready && (
         <p className="flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
@@ -102,7 +103,7 @@ export default function PlatformSettingsPage() {
       </section>
 
       <section className="space-y-3 rounded-2xl border border-gray-100 bg-white p-5">
-        <h2 className="font-semibold text-ink-950">Your Stripe (company subscriptions)</h2>
+        <h2 className="flex items-center gap-3 font-semibold text-ink-950">Your Stripe (company subscriptions) <HelpLink to="platform-stripe" /></h2>
         <p className="text-sm text-gray-600">
           Companies pay their subscriptions into this account. In Stripe → Developers → Webhooks, add this address for the events
           checkout.session.completed, customer.subscription.created, customer.subscription.updated, customer.subscription.deleted and invoice.payment_failed, then paste its signing secret here.
@@ -119,7 +120,7 @@ export default function PlatformSettingsPage() {
         </div>
         {secretRow("stripe_secret_key", "Stripe secret key", "sk_live_…")}
         {secretRow("stripe_webhook_secret", "Webhook signing secret", "whsec_…")}
-        <h2 className="pt-2 font-semibold text-ink-950">Your Resend (platform emails)</h2>
+        <h2 className="flex items-center gap-3 pt-2 font-semibold text-ink-950">Your Resend (platform emails) <HelpLink to="platform-email" /></h2>
         <p className="text-sm text-gray-600">Welcome / set-password emails, and every company&apos;s emails until it adds its own key.</p>
         {secretRow("resend_api_key", "Resend API key", "re_…")}
         <button

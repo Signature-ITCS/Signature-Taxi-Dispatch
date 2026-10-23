@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Loader2, Save, Plus, Trash2, Check, X, Pencil, Percent, PoundSterling, Users, Luggage, Backpack, Baby, Layers, Calculator, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PageHeader from "@/components/admin/PageHeader";
+import HelpLink from "@/components/docs/HelpLink";
 import { carIcon } from "@/components/booking/CarIcon";
 import { cn, money } from "@/lib/format";
 import { logActivity } from "@/lib/activity";
@@ -117,7 +118,7 @@ export default function PricingPage() {
 
   return (
     <div>
-      <PageHeader title="Pricing" subtitle="Fixed area prices first, otherwise base fare + distance bands + extra charges · rounded to the nearest £" />
+      <PageHeader help="pricing" title="Pricing" subtitle="Fixed area prices first, otherwise base fare + distance bands + extra charges · rounded to the nearest £" />
 
       {loading ? (
         <div className="flex h-64 items-center justify-center">
@@ -128,7 +129,7 @@ export default function PricingPage() {
           {/* Categories */}
           <section>
             <h2 className="mb-3 font-display text-sm font-bold uppercase tracking-wide text-gray-400">
-              Vehicle Categories
+              Vehicle Categories <span className="ml-2 normal-case tracking-normal"><HelpLink to="pricing#car-types" /></span>
             </h2>
             <div className="grid gap-4 lg:grid-cols-3">
               {cats.map((c, i) => {
@@ -221,7 +222,7 @@ export default function PricingPage() {
           {/* Add-ons */}
           <section>
             <h2 className="mb-3 font-display text-sm font-bold uppercase tracking-wide text-gray-400">
-              Add-ons
+              Add-ons <span className="ml-2 normal-case tracking-normal"><HelpLink to="pricing#child-seat" /></span>
             </h2>
             <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-3">
@@ -263,7 +264,7 @@ export default function PricingPage() {
           <section>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-display text-sm font-bold uppercase tracking-wide text-gray-400">
-                Extra Charges &amp; Surge
+                Extra Charges &amp; Surge <span className="ml-2 normal-case tracking-normal"><HelpLink to="pricing#extra-charges" /></span>
               </h2>
             </div>
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
@@ -495,7 +496,7 @@ function DistancePricing({ cats }: { cats: VehicleCategory[] }) {
       <div className="mb-1 flex items-center gap-2">
         <Layers className="h-4 w-4 text-brand-600" />
         <h2 className="font-display text-sm font-bold uppercase tracking-wide text-gray-400">
-          Distance rate bands (per mile)
+          Distance rate bands (per mile) <span className="ml-2 normal-case tracking-normal"><HelpLink to="pricing#distance-bands" /></span>
         </h2>
       </div>
       <p className="mb-3 max-w-2xl text-xs text-gray-400">

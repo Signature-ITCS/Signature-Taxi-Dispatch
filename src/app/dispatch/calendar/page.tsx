@@ -106,7 +106,7 @@ export default function CalendarPage() {
 
   return (
     <div>
-      <PageHeader title="Calendar" subtitle="Journeys by day — plan drivers ahead of busy days" />
+      <PageHeader help="calendar-map#calendar" title="Calendar" subtitle="Journeys by day — plan drivers ahead of busy days" />
       <div className="grid gap-5 px-5 pb-24 md:px-8 md:pb-10 lg:grid-cols-[1fr_380px]">
         {/* Month */}
         <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">

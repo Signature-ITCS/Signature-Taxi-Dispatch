@@ -1,5 +1,6 @@
 "use client";
 
+import HelpLink from "@/components/docs/HelpLink";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -36,7 +37,7 @@ export default function RequestsPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="font-display text-2xl font-bold text-ink-950">Requests</h1>
+      <h1 className="flex items-center gap-3 font-display text-2xl font-bold text-ink-950">Requests <HelpLink to="master-dashboard#requests" /></h1>
       <List kind="setup" rows={data.setup} update={update} />
       <List kind="restore" rows={data.restore} update={update} />
     </div>

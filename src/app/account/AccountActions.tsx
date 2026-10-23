@@ -1,5 +1,6 @@
 "use client";
 
+import HelpLink from "@/components/docs/HelpLink";
 import { useState } from "react";
 import { CreditCard, LifeBuoy, History, Loader2, CheckCircle2 } from "lucide-react";
 import type { SetupPackage } from "@/lib/services";
@@ -58,7 +59,7 @@ export default function AccountActions({
 
       <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
         <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink-950">
-          <CreditCard className="h-5 w-5 text-brand-600" /> Billing
+          <CreditCard className="h-5 w-5 text-brand-600" /> Billing <span className="ml-auto"><HelpLink to="plan-billing#manage" /></span>
         </h2>
         {hasBilling ? (
           <>
@@ -80,7 +81,7 @@ export default function AccountActions({
 
       <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
         <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink-950">
-          <LifeBuoy className="h-5 w-5 text-brand-600" /> We&apos;ll set it up for you
+          <LifeBuoy className="h-5 w-5 text-brand-600" /> We&apos;ll set it up for you <span className="ml-auto"><HelpLink to="setup-help" /></span>
         </h2>
         <p className="mt-1 text-sm text-gray-600">
           Don&apos;t want to deal with payment, email or SMS settings? Choose a package and we&apos;ll do it. Never send us
@@ -115,7 +116,7 @@ export default function AccountActions({
       {!backupsIncluded && (
         <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
           <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink-950">
-            <History className="h-5 w-5 text-brand-600" /> Restore your data
+            <History className="h-5 w-5 text-brand-600" /> Restore your data <span className="ml-auto"><HelpLink to="backups#restore" /></span>
           </h2>
           <p className="mt-1 text-sm text-gray-600">
             Lost or changed something by mistake? We can put your data back to how it was on an earlier day

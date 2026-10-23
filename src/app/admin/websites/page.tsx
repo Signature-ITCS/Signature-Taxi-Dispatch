@@ -81,6 +81,7 @@ export default function WebsitesPage() {
     <div>
       <PageHeader
         title="Widgets"
+        help="booking-widget#widget"
         subtitle="Embeddable booking widgets — one per website or partner"
         action={
           <button

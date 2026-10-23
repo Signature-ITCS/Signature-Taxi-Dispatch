@@ -72,7 +72,7 @@ export default function CustomersPage() {
 
   return (
     <div>
-      <PageHeader title="Customers" subtitle="Everyone who has booked a ride" />
+      <PageHeader help="customers" title="Customers" subtitle="Everyone who has booked a ride" />
       {loadError && (
         <div className="px-5 pb-4 md:px-8">
           <LoadError what="customers" detail={loadError} onRetry={load} />

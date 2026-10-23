@@ -1,5 +1,6 @@
 "use client";
 
+import HelpLink from "@/components/docs/HelpLink";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Map as LeafletMap, Layer } from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -287,7 +288,7 @@ export default function FixedPrices({ cats }: { cats: VehicleCategory[] }) {
               ) : (
                 <div>
                   <div className="mb-3 flex items-center justify-between">
-                    <p className="font-display font-bold text-ink-950">Areas</p>
+                    <p className="flex items-center gap-2 font-display font-bold text-ink-950">Areas <HelpLink to="fixed-prices#areas" /></p>
                     <button
                       onClick={startNew}
                       className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
@@ -322,7 +323,7 @@ export default function FixedPrices({ cats }: { cats: VehicleCategory[] }) {
           {/* Routes */}
           <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="font-display font-bold text-ink-950">Fixed routes</p>
+              <p className="flex items-center gap-2 font-display font-bold text-ink-950">Fixed routes <HelpLink to="fixed-prices#routes" /></p>
               <button
                 onClick={newRoute}
                 disabled={zones.length < 2 || !!draft}

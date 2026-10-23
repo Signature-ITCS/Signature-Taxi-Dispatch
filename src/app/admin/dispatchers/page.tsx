@@ -40,6 +40,7 @@ export default function DispatchersPage() {
     <div>
       <PageHeader
         title="Dispatchers"
+        help="dispatchers"
         subtitle="Staff who log in to the dispatch board"
         action={
           <button

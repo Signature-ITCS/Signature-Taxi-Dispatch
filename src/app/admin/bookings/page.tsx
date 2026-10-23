@@ -295,6 +295,7 @@ export default function BookingsPage() {
     <div>
       <PageHeader
         title="Bookings"
+        help="bookings"
         subtitle="Complete booking history"
         action={
           <div className="flex items-center gap-2">

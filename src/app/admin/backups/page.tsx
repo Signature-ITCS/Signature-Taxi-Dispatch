@@ -68,7 +68,7 @@ export default function BackupsPage() {
 
   return (
     <div>
-      <PageHeader title="Backups" subtitle="Your company's data is backed up every night and kept for 30 days." />
+      <PageHeader help="backups" title="Backups" subtitle="Your company's data is backed up every night and kept for 30 days." />
 
       {msg && <p className={`mb-4 rounded-xl p-3 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{msg.text}</p>}
 

@@ -1,5 +1,6 @@
 "use client";
 
+import HelpLink from "@/components/docs/HelpLink";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -124,6 +125,7 @@ export default function DriversPage() {
     <div>
       <PageHeader
         title="Drivers"
+        help="drivers"
         subtitle="Your fleet — driver app or WhatsApp"
         action={
           <button
@@ -650,7 +652,7 @@ function DriverModal({
                   className="mt-0.5 h-4 w-4 accent-brand-600"
                 />
                 <span>
-                  <span className="font-semibold text-ink-950">Give this driver the driver app</span>
+                  <span className="font-semibold text-ink-950">Give this driver the driver app</span> <HelpLink to="drivers#app-login" />
                   <span className="block text-xs text-gray-500">
                     Creates their login and emails it with the install link. Uses the email above.
                   </span>

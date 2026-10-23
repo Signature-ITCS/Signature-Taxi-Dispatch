@@ -102,6 +102,7 @@ export default function PaymentsPage() {
     <div>
       <PageHeader
         title="Payments"
+        help="stripe#refunds"
         subtitle="Every payment taken — card through Stripe, cash collected by drivers. Refunds are made in the Stripe Dashboard."
         action={
           <button

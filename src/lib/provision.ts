@@ -13,6 +13,7 @@ import { audit, type CompanyStatus } from "@/lib/tenant";
 const RESERVED = new Set([
   "admin", "api", "account", "auth", "book", "booking", "dispatch", "driver", "embed", "install",
   "login", "master", "print", "pricing", "signup", "staff", "track", "www", "app", "help", "support",
+  "documentation", "docs", "signup-done", "set-password", "forgot",
 ]);
 
 export function slugify(name: string): string {

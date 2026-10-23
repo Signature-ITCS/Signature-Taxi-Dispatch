@@ -245,6 +245,7 @@ export default function DriverMapPage() {
     <div>
       <PageHeader
         title="Driver map"
+        help="calendar-map#map"
         subtitle={`${counts.available} available · ${counts.busy} busy · ${counts.offline} offline`}
       />
       <div className="grid gap-4 px-5 pb-24 md:grid-cols-[1fr_300px] md:px-8 md:pb-10">

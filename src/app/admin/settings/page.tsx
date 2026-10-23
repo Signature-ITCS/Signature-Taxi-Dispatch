@@ -7,6 +7,7 @@ import {
   KeyRound, Copy, CheckCircle2, Circle, LifeBuoy, Upload, Trash2, AlertTriangle,
 } from "lucide-react";
 import PageHeader from "@/components/admin/PageHeader";
+import HelpLink from "@/components/docs/HelpLink";
 import { SecretInput, useSecretFields, type SecretStatus } from "@/components/SecretInput";
 
 interface Config {
@@ -117,7 +118,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-5 pb-16">
-      <PageHeader title="Settings" subtitle="Your company's details, look, keys and notifications." />
+      <PageHeader help="getting-started#checklist" title="Settings" subtitle="Your company's details, look, keys and notifications." />
       {error && (
         <p className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-700">
           <AlertTriangle className="h-4 w-4" /> {error}
@@ -125,7 +126,7 @@ export default function SettingsPage() {
       )}
 
       {/* Checklist */}
-      <Card icon={CheckCircle2} title="Setup checklist">
+      <Card icon={CheckCircle2} title="Setup checklist" help="getting-started#checklist">
         <div className="grid gap-2 sm:grid-cols-2">
           {checklist.map(([label, ok]) => (
             <p key={label} className="flex items-center gap-2 text-sm text-gray-700">
@@ -151,7 +152,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Company */}
-      <Card icon={Building2} title="Company details" note="Shown on your booking page, emails and receipts.">
+      <Card icon={Building2} title="Company details" help="company-details" note="Shown on your booking page, emails and receipts.">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Company name" value={cfg.name} onChange={(v) => set("name", v)} />
           <Field label="Legal name (receipts)" value={cfg.legal_name} onChange={(v) => set("legal_name", v)} placeholder="City Cars Ltd" />
@@ -172,7 +173,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Branding */}
-      <Card icon={Palette} title="Logo and colours" note="Used on your booking page, apps, emails and receipts.">
+      <Card icon={Palette} title="Logo and colours" help="branding" note="Used on your booking page, apps, emails and receipts.">
         <LogoUpload logoUrl={cfg.logo_url} onChanged={load} onRemove={() => { set("logo_url", ""); }} />
         <div className="mt-4 flex flex-wrap gap-6">
           <ColorField label="Main colour" value={cfg.primary_color} onChange={(v) => set("primary_color", v)} />
@@ -186,7 +187,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Email */}
-      <Card icon={Mail} title="Email" note="Booking confirmations, thank-you emails and alerts.">
+      <Card icon={Mail} title="Email" help="email" note="Booking confirmations, thank-you emails and alerts.">
         <p className="mb-3 rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
           Without your own Resend key, emails are sent by us, showing your company name. To send from your own address
           (e.g. bookings@yourdomain), verify your domain at resend.com, then add the key and address here.
@@ -200,7 +201,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* SMS */}
-      <Card icon={MessageSquare} title="SMS (Cosmic SMS)" note="Booking confirmations, “driver arrived” and “ride complete” texts.">
+      <Card icon={MessageSquare} title="SMS (Cosmic SMS)" help="sms#setup" note="Booking confirmations, “driver arrived” and “ride complete” texts.">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Sender name (max 11 letters/digits)" value={cfg.sms_sender} onChange={(v) => set("sms_sender", v.replace(/[^A-Za-z0-9]/g, "").slice(0, 11))} placeholder="CityCars" />
           <SecretInput label="Cosmic username" name="cosmic_username" status={sec.cosmic_username} fields={secretFields} />
@@ -210,10 +211,10 @@ export default function SettingsPage() {
       </Card>
 
       {/* Card payments */}
-      <Card icon={CreditCard} title="Card payments (Stripe)" note="Customers pay on Stripe's own page; the money goes straight to your Stripe account.">
+      <Card icon={CreditCard} title="Card payments (Stripe)" help="stripe" note="Customers pay on Stripe's own page; the money goes straight to your Stripe account.">
         <ol className="mb-3 list-decimal space-y-1 pl-5 text-sm text-gray-600">
-          <li>In your Stripe Dashboard → Developers → API keys, copy the <b>secret key</b> and paste it below.</li>
-          <li>In Developers → Webhooks, add an endpoint with this address, for the events checkout.session.completed, checkout.session.expired, payment_intent.succeeded, payment_intent.payment_failed, charge.refunded, charge.dispute.created and charge.dispute.closed:</li>
+          <li>In your Stripe Dashboard → Developers → API keys, copy the <b>secret key</b> and paste it below. <HelpLink to="stripe#secret-key" label="Show me" /></li>
+          <li>In Developers → Webhooks, add an endpoint with this address, for the events checkout.session.completed, checkout.session.expired, payment_intent.succeeded, payment_intent.payment_failed, charge.refunded, charge.dispute.created and charge.dispute.closed: <HelpLink to="stripe#webhook" label="Show me" /></li>
         </ol>
         <CopyBox value={data.stripe_webhook_url} />
         <p className="mb-3 mt-2 text-sm text-gray-600">3. Paste that webhook&apos;s <b>signing secret</b> below, save, then switch card payments on.</p>
@@ -232,7 +233,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Alerts */}
-      <Card icon={BellRing} title="Booking alert emails" note="Who gets an email for every new booking, payment problem and pickup reminder.">
+      <Card icon={BellRing} title="Booking alert emails" help="alert-emails" note="Who gets an email for every new booking, payment problem and pickup reminder.">
         <AlertList value={cfg.booking_alert_emails} onChange={(v) => set("booking_alert_emails", v)} />
         <div className="mt-4"><SaveBtn {...btn} section="alerts" fields={["booking_alert_emails"]} /></div>
       </Card>
@@ -275,11 +276,12 @@ function SaveBtn({
   );
 }
 
-function Card({ icon: Icon, title, note, children }: { icon: typeof Mail; title: string; note?: string; children: React.ReactNode }) {
+function Card({ icon: Icon, title, note, help, children }: { icon: typeof Mail; title: string; note?: string; help?: string; children: React.ReactNode }) {
   return (
     <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
       <h2 className="flex items-center gap-2 font-display text-base font-bold text-ink-950">
         <Icon className="h-5 w-5 text-brand-600" /> {title}
+        {help && <span className="ml-auto"><HelpLink to={help} /></span>}
       </h2>
       {note && <p className="mb-4 mt-0.5 text-sm text-gray-500">{note}</p>}
       {!note && <div className="mb-3" />}

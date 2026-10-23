@@ -20,6 +20,7 @@ import {
   ScrollText,
   Settings,
   DatabaseBackup,
+  BookOpen,
   Menu,
   X,
 } from "lucide-react";
@@ -45,6 +46,7 @@ const NAV = [
   { href: "/admin/logs", label: "Activity Logs", icon: ScrollText },
   { href: "/admin/settings", label: "Settings", icon: Settings },
   { href: "/admin/backups", label: "Backups", icon: DatabaseBackup },
+  { href: "/documentation", label: "Help & docs", icon: BookOpen },
   { href: "/account", label: "Plan & billing", icon: CreditCard },
 ];
 

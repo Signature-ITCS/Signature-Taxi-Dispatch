@@ -1,5 +1,6 @@
 "use client";
 
+import HelpLink from "@/components/docs/HelpLink";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Plus, RefreshCw, Check } from "lucide-react";
 
@@ -56,7 +57,7 @@ export default function PlansPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink-950">Plans</h1>
+          <h1 className="flex items-center gap-3 font-display text-2xl font-bold text-ink-950">Plans <HelpLink to="master-dashboard#plans" /></h1>
           <p className="text-sm text-gray-500">Limits apply instantly. A plan is sold on the website once it is public, active and synced to Stripe.</p>
         </div>
         <button onClick={addPlan} className="flex items-center gap-1 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white">
