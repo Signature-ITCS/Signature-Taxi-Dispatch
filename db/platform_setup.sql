@@ -3720,9 +3720,16 @@ begin;
 -- ── 0. Fresh databases only ──────────────────────────────────────────────────
 do $$
 begin
-  if to_regclass('public.companies') is null
-     and (exists (select 1 from public.bookings) or exists (select 1 from public.profiles)) then
-    raise exception 'This database already has bookings or staff. The platform setup is for a new, empty database — nothing was changed.';
+  if to_regclass('public.companies') is null then
+    -- The base tables come from the earlier files (00_schema.sql …); this one
+    -- only converts them. (Nested IFs: the queries below must not even be
+    -- planned when the tables are missing.)
+    if to_regclass('public.bookings') is null or to_regclass('public.profiles') is null then
+      raise exception 'The base tables are missing — run the earlier setup parts first (1a, then 1b), then this one. Nothing was changed.';
+    end if;
+    if exists (select 1 from public.bookings) or exists (select 1 from public.profiles) then
+      raise exception 'This database already has bookings or staff. The platform setup is for a new, empty database — nothing was changed.';
+    end if;
   end if;
 end $$;
 
