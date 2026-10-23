@@ -1,0 +1,128 @@
+# Daily database backup — a complete .sql file of the dispatch database.
+#
+# Runs every night (and on demand from Actions → "Back up database" → Run
+# workflow). Each backup is kept:
+#   • on GitHub, attached to that run, for 90 days (always);
+#   • in Google Drive, folder "Cheap Transfers Backups", last 60 days (only once
+#     the RCLONE_CONFIG secret is set — see db/BACKUPS.md).
+#
+# Needs one repository secret:
+#   SUPABASE_DB_URL  Supabase → Connect → "Session pooler" connection string,
+#                    with the database password filled in.
+#
+# Restore with the "Restore database" workflow (db-restore.yml).
+
+name: Back up database
+
+on:
+  schedule:
+    - cron: "30 2 * * *" # 02:30 UTC every day
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    # Pinned: the PostgreSQL apt repo must support the runner OS, and
+    # ubuntu-latest moves to Ubuntu 26 from 19 Oct 2026.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      RCLONE_CONFIG_B64: ${{ secrets.RCLONE_CONFIG }}
+    steps:
+      - name: Check the database secret is set
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::Add the SUPABASE_DB_URL secret (Settings → Secrets and variables → Actions). See db/BACKUPS.md."
+            exit 1
+          fi
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          # The runner image ships an older client whose pg_dump/psql win on PATH;
+          # put version 17 first (it must be >= the Supabase server's version).
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          /usr/lib/postgresql/17/bin/pg_dump --version
+
+      - name: Dump the database
+        run: |
+          set -euo pipefail
+          STAMP=$(date -u +%Y-%m-%d)
+          FILE="cheap-transfers-db-$STAMP.sql"
+          echo "FILE=$FILE" >> "$GITHUB_ENV"
+          {
+            echo "-- Cheap Transfers — database backup $STAMP (UTC)"
+            echo "-- Restore: paste this whole file into Supabase → SQL Editor and Run,"
+            echo "-- or use the 'Restore database' GitHub workflow. See db/BACKUPS.md."
+            echo
+            echo "-- ── 1. All app tables, functions, triggers, policies and data (schema public) ──"
+            # Plain INSERT statements (not COPY), so the file also runs in the
+            # Supabase SQL Editor, not just psql.
+            # Grants are kept (the app's anon/authenticated access depends on them).
+            # The schema itself is never dropped or re-created: that would wipe
+            # Supabase's default privileges on it. Only its contents are replaced.
+            # Default privileges themselves are Supabase's (set up on every project,
+            # and not changeable by the postgres login), so they are left out too.
+            pg_dump "$SUPABASE_DB_URL" --schema=public --clean --if-exists --no-owner --quote-all-identifiers \
+              --rows-per-insert=200 \
+              | sed -E '/^DROP SCHEMA IF EXISTS "public";$/d; /^CREATE SCHEMA "public";$/d; /^COMMENT ON SCHEMA "public" IS/d; /^ALTER DEFAULT PRIVILEGES /d'
+            echo
+            echo "-- ── 2. Staff and driver logins (auth users) ──"
+            echo "-- Data only (the auth schema belongs to Supabase). Logins that already"
+            echo "-- exist are skipped, so this part never fails on duplicates."
+            pg_dump "$SUPABASE_DB_URL" --data-only --no-owner --no-privileges --quote-all-identifiers \
+              --rows-per-insert=200 --on-conflict-do-nothing \
+              --table=auth.users --table=auth.identities
+            echo
+            echo "-- ── 3. Live updates and API refresh ──"
+            echo "-- Re-creating the tables drops them from Supabase realtime; add them back."
+            echo "grant usage on schema public to anon, authenticated, service_role;"
+            for t in bookings drivers activity_logs staff_notifications; do
+              echo "do \$\$ begin alter publication supabase_realtime add table public.$t; exception when others then null; end \$\$;"
+            done
+            echo "notify pgrst, 'reload schema';"
+          } | sed -E '/^.(un)?restrict [A-Za-z0-9]+$/d' > "$FILE"
+          # (pg_dump adds \restrict / \unrestrict psql-only lines; the SQL Editor
+          #  can't run them, and psql doesn't need them, so they are removed.)
+          # Supabase's own event triggers (e.g. ensure_rls → rls_auto_enable) use
+          # functions in the public schema that can't be dropped while the trigger
+          # exists. Replace them in place instead, so a restore never trips on them.
+          for fn in $(psql "$SUPABASE_DB_URL" -At -c "select distinct p.proname from pg_event_trigger e join pg_proc p on p.oid = e.evtfoid join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public'"); do
+            echo "Event-trigger function public.$fn: replaced in place on restore"
+            sed -i -E "/^DROP FUNCTION IF EXISTS \"public\"\.\"$fn\"\(\);$/d; s/^CREATE FUNCTION \"public\"\.\"$fn\"\(/CREATE OR REPLACE FUNCTION \"public\".\"$fn\"(/" "$FILE"
+          done
+          # A healthy dump always contains the bookings table; refuse to keep an empty one.
+          grep -q 'CREATE TABLE "public"."bookings"' "$FILE" || { echo "::error::Backup looks incomplete"; exit 1; }
+          gzip -k -9 "$FILE"
+          ls -lh "$FILE" "$FILE.gz"
+
+      - name: Keep it on GitHub (90 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup
+          path: ${{ env.FILE }}.gz
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Copy it to Google Drive
+        if: env.RCLONE_CONFIG_B64 != ''
+        run: |
+          set -euo pipefail
+          curl -fsSL https://rclone.org/install.sh | sudo bash > /dev/null
+          mkdir -p ~/.config/rclone
+          echo "$RCLONE_CONFIG_B64" | base64 -d > ~/.config/rclone/rclone.conf
+          rclone copy "$FILE.gz" "gdrive:Cheap Transfers Backups" --no-traverse
+          # Keep the last 60 days in Drive.
+          rclone delete "gdrive:Cheap Transfers Backups" --min-age 60d --include "cheap-transfers-db-*.sql.gz"
+          echo "Copied to Google Drive: Cheap Transfers Backups/$FILE.gz"
