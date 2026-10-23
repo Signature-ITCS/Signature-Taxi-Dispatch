@@ -35,7 +35,7 @@ import RouteMap, { type RouteLeg } from "@/components/booking/RouteMap";
 import { carIcon } from "@/components/booking/CarIcon";
 import { money, isValidPhone } from "@/lib/format";
 import { rememberCheckout, rememberedCheckout, forgetCheckout } from "@/lib/checkoutSession";
-import { cardPaymentsEnabled } from "@/lib/paymentMethods";
+import { useBrand } from "@/components/BrandProvider";
 import type { FareBreakdown, PaymentMethod } from "@/lib/types";
 import { Logo } from "@/components/Brand";
 import PhoneInput from "@/components/PhoneInput";
@@ -167,14 +167,19 @@ async function getRoute(j: Journey): Promise<{ km: number; min: number } | null>
 const UNAVAILABLE = "That vehicle type is no longer available — please go back and choose another.";
 
 export default function BookingWidget({
-  site = "main",
+  site = "",
   embed = false,
   manual = false,
+  cardEnabled = false,
 }: {
+  /** The booking website's slug. Staff (manual) bookings use their own company's. */
   site?: string;
   embed?: boolean;
   manual?: boolean;
+  /** Card payments switched on for this company (decided by the page, on the server). */
+  cardEnabled?: boolean;
 }) {
+  const brand = useBrand();
   const [step, setStep] = useState(0); // 0 trip, 1 car, 2 details
   const [outbound, setOutbound] = useState<Journey>(emptyJourney);
   const [returnEnabled, setReturnEnabled] = useState(false);
@@ -352,7 +357,7 @@ export default function BookingWidget({
   // Card is closed to the public until it is explicitly switched on. Staff
   // taking a phone booking keep it, because they collect that payment
   // themselves — it never goes near Stripe.
-  const cardOffered = manual || cardPaymentsEnabled();
+  const cardOffered = manual || cardEnabled;
   useEffect(() => {
     if (!cardOffered && payment === "card") setPayment("cash");
   }, [cardOffered, payment]);
@@ -1013,7 +1018,7 @@ export default function BookingWidget({
         </div>
 
         {!manual && (
-          <p className="mt-4 text-center text-xs text-gray-400">Secured booking · Cheap Transfers</p>
+          <p className="mt-4 text-center text-xs text-gray-400">Secured booking · {brand.name}</p>
         )}
       </div>
     </main>

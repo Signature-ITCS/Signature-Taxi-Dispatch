@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, emailEnabled } from "@/lib/email";
 import { rideThankYouEmail } from "@/lib/emailTemplates";
+import { getCompanyBrand } from "@/lib/companyBrand";
 
 function siteOrigin(fallback?: string): string {
   return (process.env.NEXT_PUBLIC_SITE_URL || fallback || "").replace(/\/$/, "");
@@ -18,7 +19,6 @@ function siteOrigin(fallback?: string): string {
  * after the fact, and the passenger never rode in one of our cars.
  */
 export async function sendRideThankYou(bookingId: string, origin?: string): Promise<"sent" | "skipped" | "failed"> {
-  if (!(await emailEnabled())) return "skipped";
   const base = siteOrigin(origin);
   if (!base) return "skipped";
 
@@ -31,9 +31,15 @@ export async function sendRideThankYou(bookingId: string, origin?: string): Prom
     .is("thanks_sent_at", null)
     .is("external_provider", null)
     .not("customer_email", "is", null)
-    .select("id, booking_number, customer_name, customer_email, pickup_address, dropoff_address")
+    .select("id, company_id, booking_number, customer_name, customer_email, pickup_address, dropoff_address")
     .maybeSingle();
   if (!claimed?.customer_email) return "skipped";
+  const companyId = claimed.company_id as string;
+  if (!(await emailEnabled(companyId))) {
+    await admin.from("bookings").update({ thanks_sent_at: null }).eq("id", bookingId);
+    return "skipped";
+  }
+  const brand = await getCompanyBrand(companyId);
 
   const mail = rideThankYouEmail({
     customerName: claimed.customer_name ?? "",
@@ -41,11 +47,11 @@ export async function sendRideThankYou(bookingId: string, origin?: string): Prom
     pickup: claimed.pickup_address,
     dropoff: claimed.dropoff_address,
     reviewUrl: `${base}/track/${encodeURIComponent(claimed.booking_number)}#review`,
-    installUrl: `${base}/install`,
-    bookUrl: `${base}/book`,
-  });
+    installUrl: `${base}/install/${brand.slug ?? ""}`,
+    bookUrl: `${base}/book/${brand.slug ?? ""}`,
+  }, brand);
 
-  const ok = await sendEmail({ to: claimed.customer_email, subject: mail.subject, html: mail.html });
+  const ok = await sendEmail({ companyId, to: claimed.customer_email, subject: mail.subject, html: mail.html });
   if (!ok) {
     // Hand it back so the daily sweep tries again.
     await admin.from("bookings").update({ thanks_sent_at: null }).eq("id", bookingId);

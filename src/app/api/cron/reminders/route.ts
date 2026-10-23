@@ -5,6 +5,7 @@ import { sendEmail, emailEnabled } from "@/lib/email";
 import { staffAlertRecipients } from "@/lib/notifyStaff";
 import { upcomingReminderEmail, type ReminderJob } from "@/lib/emailTemplates";
 import { rateLimit, clientIp } from "@/lib/rateLimit";
+import { getCompanyBrand } from "@/lib/companyBrand";
 
 /**
  * One-hour pickup reminders. Called every 5 minutes by the database scheduler
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
 
   const { data: due } = await admin
     .from("bookings")
-    .select("id, booking_number, scheduled_at, created_at, status, driver_id, customer_name, customer_whatsapp, pickup_address, dropoff_address, driver:drivers(full_name)")
+    .select("id, company_id, booking_number, scheduled_at, created_at, status, driver_id, customer_name, customer_whatsapp, pickup_address, dropoff_address, driver:drivers(full_name)")
     .is("reminder_sent_at", null)
     .in("status", ["pending", "assigned", "accepted"])
     .gt("scheduled_at", now.toISOString())
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
 
   type Row = {
     id: string;
+    company_id: string;
     booking_number: string;
     scheduled_at: string;
     created_at: string;
@@ -100,10 +102,14 @@ export async function POST(req: Request) {
     );
   }
 
-  if (sent.length && (await emailEnabled())) {
-    const to = await staffAlertRecipients();
+  // One email per company, to that company's own alert list, in its own name.
+  const byCompany = new Map<string, Row[]>();
+  for (const b of sent) byCompany.set(b.company_id, [...(byCompany.get(b.company_id) ?? []), b]);
+  for (const [companyId, rows] of byCompany) {
+    if (!(await emailEnabled(companyId))) continue;
+    const to = await staffAlertRecipients(companyId);
     if (to.length) {
-      const jobs: ReminderJob[] = sent.map((b) => ({
+      const jobs: ReminderJob[] = rows.map((b) => ({
         bookingNumber: b.booking_number,
         scheduledAt: b.scheduled_at,
         customerName: b.customer_name,
@@ -112,8 +118,8 @@ export async function POST(req: Request) {
         driverName: b.driver?.full_name ?? null,
         accepted: b.status === "accepted",
       }));
-      const mail = upcomingReminderEmail(jobs, `${origin}/dispatch`);
-      await sendEmail({ to, subject: mail.subject, html: mail.html });
+      const mail = upcomingReminderEmail(jobs, `${origin}/dispatch`, await getCompanyBrand(companyId));
+      await sendEmail({ companyId, to, subject: mail.subject, html: mail.html });
     }
   }
 

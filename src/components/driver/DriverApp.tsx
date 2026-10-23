@@ -29,6 +29,7 @@ import {
 import JobMap from "@/components/driver/JobMap";
 import { createClient } from "@/lib/supabase/client";
 import { LogoMark } from "@/components/Brand";
+import { useBrand } from "@/components/BrandProvider";
 import { money, cn } from "@/lib/format";
 
 /* ── Types ────────────────────────────────────────────────────────────────── */
@@ -147,6 +148,7 @@ function chime() {
 /* ── App ──────────────────────────────────────────────────────────────────── */
 
 export default function DriverApp() {
+  const brand = useBrand();
   const [supabase] = useState(() => createClient());
   const [me, setMe] = useState<Me | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -435,7 +437,7 @@ export default function DriverApp() {
           <div className="min-w-0 flex-1">
             <p className="truncate font-display text-base font-bold">{me.full_name}</p>
             <p className="truncate text-xs text-gray-400">
-              {car || "Cheap Transfers Driver"}
+              {car || `${brand.name} Driver`}
               {me.vehicle?.plate ? ` · ${me.vehicle.plate}` : ""}
             </p>
           </div>

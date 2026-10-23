@@ -1,17 +1,22 @@
 /**
- * SMS sender via the Cosmic SMS REST API (Basic auth + XML body).
+ * SMS sender via the Cosmic SMS REST API (Basic auth + XML body). Server-only.
  *
- * Username / API password come from COSMICSMS_* env vars (kept in .env / Vercel
- * — never in the DB or admin UI). The sender ID is admin-editable config
- * (app_settings), falling back to COSMICSMS_SENDER. Gracefully no-ops when
- * unconfigured. Best-effort — returns false, never throws.
+ * Each company uses its OWN Cosmic SMS account: username and API password saved
+ * (encrypted) in Admin → Settings → SMS. The sender ID is its settings value,
+ * else its name. Gracefully no-ops when the company hasn't set SMS up.
+ * Best-effort — returns false, never throws.
  */
 import { normalizeWhatsapp } from "./format";
-import { getConfigValue } from "./settings";
-import { BRAND } from "./brand";
+import { getSecret } from "./secrets";
+import { getCompanyBrand } from "./companyBrand";
 
-export async function smsEnabled(): Promise<boolean> {
-  return Boolean(process.env.COSMICSMS_USERNAME && process.env.COSMICSMS_API_PASSWORD);
+async function credentials(companyId: string): Promise<{ user: string; pass: string } | null> {
+  const [user, pass] = await Promise.all([getSecret(companyId, "cosmic_username"), getSecret(companyId, "cosmic_password")]);
+  return user && pass ? { user, pass } : null;
+}
+
+export async function smsEnabled(companyId: string): Promise<boolean> {
+  return (await credentials(companyId)) !== null;
 }
 
 function escapeXml(s: string): string {
@@ -23,28 +28,16 @@ function escapeXml(s: string): string {
     .replace(/'/g, "&apos;");
 }
 
-/**
- * Networks only deliver a text sender ID of up to 11 letters and digits — a
- * name like "CHEAP TRANSFERS" is rejected outright. Strip it down to
- * something that will be accepted, falling back to the brand's own.
- */
-export function smsSenderId(configured: string | null | undefined): string {
-  const cleaned = String(configured ?? "").replace(/[^A-Za-z0-9]/g, "").slice(0, 11);
-  return cleaned.length >= 3 ? cleaned : BRAND.smsSender;
-}
-
-export async function sendSms(to: string, message: string): Promise<boolean> {
-  const user = process.env.COSMICSMS_USERNAME;
-  const pass = process.env.COSMICSMS_API_PASSWORD;
-  if (!user || !pass) return false;
+export async function sendSms(companyId: string, to: string, message: string): Promise<boolean> {
+  const creds = await credentials(companyId);
+  if (!creds) return false;
 
   const mobile = normalizeWhatsapp(to); // -> 447... international form
   if (!mobile) return false;
-  const sender = smsSenderId(
-    await getConfigValue("notifications", "sms_sender", process.env.COSMICSMS_SENDER)
-  );
+  // Networks only deliver a text sender of up to 11 letters/digits.
+  const sender = (await getCompanyBrand(companyId)).smsSender;
 
-  const auth = Buffer.from(`${user}:${pass}`).toString("base64");
+  const auth = Buffer.from(`${creds.user}:${creds.pass}`).toString("base64");
   const xml =
     `<?xml version="1.0" encoding="UTF-8"?>` +
     `<sendsms><sender>${escapeXml(sender)}</sender>` +

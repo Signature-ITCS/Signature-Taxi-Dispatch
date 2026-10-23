@@ -7,7 +7,8 @@ import { sendEmail, emailEnabled } from "@/lib/email";
 import { sendSms, smsEnabled } from "@/lib/sms";
 import { customerConfirmationEmail, staffAlertEmail, type BookingEmailData } from "@/lib/emailTemplates";
 import { staffAlertRecipients } from "@/lib/notifyStaff";
-import { BRAND } from "@/lib/brand";
+import { getCompanyBrand } from "@/lib/companyBrand";
+import type { SiteRef } from "@/lib/tenant";
 
 /**
  * The one place a booking is written and announced.
@@ -67,7 +68,7 @@ export const NO_NAME = "Customer";
  * returning customer's real name. So a blank name is filled from the existing
  * customer record when there is one. A blank email becomes null.
  */
-export async function normalizeBookingInput(b: Partial<BookingInput>): Promise<void> {
+export async function normalizeBookingInput(b: Partial<BookingInput>, companyId: string | null): Promise<void> {
   if (!b) return;
   b.email = b.email?.trim() || null;
   const name = b.name?.trim() ?? "";
@@ -77,9 +78,14 @@ export async function normalizeBookingInput(b: Partial<BookingInput>): Promise<v
   }
   let known: string | null = null;
   const phone = b.whatsapp?.trim();
-  if (phone) {
+  if (phone && companyId) {
     try {
-      const { data } = await createAdminClient().from("customers").select("full_name").eq("whatsapp", phone).maybeSingle();
+      const { data } = await createAdminClient()
+        .from("customers")
+        .select("full_name")
+        .eq("company_id", companyId)
+        .eq("whatsapp", phone)
+        .maybeSingle();
       known = data?.full_name?.trim() || null;
     } catch {
       known = null;
@@ -101,8 +107,13 @@ export function validateBookingInput(b: Partial<BookingInput>): string | null {
  * exist) — e.g. a page that still had it on screen. Checked before a booking
  * or a card payment starts; never after the money is taken.
  */
-export async function categoryBookable(id: string): Promise<boolean> {
-  const { data } = await createAdminClient().from("vehicle_categories").select("is_active").eq("id", id).maybeSingle();
+export async function categoryBookable(id: string, companyId: string): Promise<boolean> {
+  const { data } = await createAdminClient()
+    .from("vehicle_categories")
+    .select("is_active")
+    .eq("id", id)
+    .eq("company_id", companyId)
+    .maybeSingle();
   return !!data?.is_active;
 }
 
@@ -121,7 +132,7 @@ export interface CreatedTrip {
  */
 export async function createTrip(
   b: BookingInput,
-  apiKey: string,
+  site: SiteRef,
   /**
    * `trustClient` honours a caller-supplied distance when there are no
    * coordinates. ONLY ever true for a signed-in staff member taking a booking
@@ -137,7 +148,7 @@ export async function createTrip(
     if (!resolved) return { ok: false, error: "no_route" };
     const { distance_km, duration_min } = resolved;
     const { data } = await callRpcCompat<LegResult>("create_booking", {
-      p_api_key: apiKey,
+      p_api_key: site.api_key,
       p_customer_name: b.name,
       p_whatsapp: b.whatsapp,
       p_pickup_address: leg.pickup_address,
@@ -182,6 +193,7 @@ export async function createTrip(
 }
 
 export interface NotifyOptions {
+  companyId: string;
   input: BookingInput;
   trip: CreatedTrip;
   /** What the customer is told they owe — may differ from the per-leg sum. */
@@ -195,11 +207,12 @@ export interface NotifyOptions {
  * All best-effort: the booking already exists, so none of this may throw.
  */
 export async function notifyBooking(opts: NotifyOptions): Promise<void> {
-  const { input: b, trip, totalFare, paid, origin } = opts;
+  const { companyId, input: b, trip, totalFare, paid, origin } = opts;
+  const brand = await getCompanyBrand(companyId);
   const out = b.outbound;
   const outbound = trip.outbound;
 
-  if ((await smsEnabled()) && b.whatsapp) {
+  if ((await smsEnabled(companyId)) && b.whatsapp) {
     try {
       const when = out.scheduled_at
         ? new Date(out.scheduled_at).toLocaleString("en-GB", {
@@ -212,8 +225,9 @@ export async function notifyBooking(opts: NotifyOptions): Promise<void> {
         : "ASAP";
       // Always the company name — the website row is named after where the
       // widget sits ("Main Website"), which means nothing to a passenger.
-      const site = BRAND.name;
+      const site = brand.name;
       await sendSms(
+        companyId,
         b.whatsapp,
         `${site}: Booking confirmed. Ref ${outbound.booking_number}. ` +
           `${out.pickup_address} to ${out.dropoff_address}. ${when}. ` +
@@ -225,12 +239,12 @@ export async function notifyBooking(opts: NotifyOptions): Promise<void> {
     }
   }
 
-  if (await emailEnabled()) {
+  if (await emailEnabled(companyId)) {
     try {
       const admin = createAdminClient();
       const [{ data: cat }, staffEmails] = await Promise.all([
-        admin.from("vehicle_categories").select("name").eq("id", b.category_id).maybeSingle(),
-        staffAlertRecipients(),
+        admin.from("vehicle_categories").select("name").eq("id", b.category_id).eq("company_id", companyId).maybeSingle(),
+        staffAlertRecipients(companyId),
       ]);
 
       const data: BookingEmailData = {
@@ -250,17 +264,17 @@ export async function notifyBooking(opts: NotifyOptions): Promise<void> {
         isReturn: false,
         returnBookingNumber: trip.return?.booking_number ?? null,
         trackUrl: `${origin}/track/${outbound.booking_number}`,
-        installUrl: `${origin}/install`,
-        siteName: BRAND.name,
+        installUrl: `${origin}/install/${brand.slug ?? ""}`,
+        siteName: brand.name,
       };
 
-      const customer = customerConfirmationEmail(data);
+      const customer = customerConfirmationEmail(data, brand);
       // Staff do want to know which website it came from.
-      const staffMail = staffAlertEmail({ ...data, siteName: outbound.website }, `${origin}/dispatch`);
+      const staffMail = staffAlertEmail({ ...data, siteName: outbound.website }, `${origin}/dispatch`, brand);
       await Promise.all([
-        b.email ? sendEmail({ to: b.email, subject: customer.subject, html: customer.html }) : null,
+        b.email ? sendEmail({ companyId, to: b.email, subject: customer.subject, html: customer.html }) : null,
         staffEmails.length
-          ? sendEmail({ to: staffEmails, subject: staffMail.subject, html: staffMail.html })
+          ? sendEmail({ companyId, to: staffEmails, subject: staffMail.subject, html: staffMail.html })
           : null,
       ]);
     } catch {
@@ -271,6 +285,7 @@ export async function notifyBooking(opts: NotifyOptions): Promise<void> {
   try {
     const admin = createAdminClient();
     await admin.from("activity_logs").insert({
+      company_id: companyId,
       action: "booking_created",
       description: `New booking ${outbound.booking_number} — ${b.name}`,
       metadata: { fare: totalFare, payment: b.payment_method ?? "cash", paid },

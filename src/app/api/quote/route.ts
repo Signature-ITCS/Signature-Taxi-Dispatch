@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { callRpcCompat } from "@/lib/supabaseRest";
-import { getWebsiteKey } from "@/lib/getWebsiteKey";
+import { websiteForRequest, getOfficeContext } from "@/lib/tenant";
 import { resolveLegDistance, type LegInput } from "@/lib/googleRoute";
 import { rateLimit, clientIp } from "@/lib/rateLimit";
 
@@ -57,8 +57,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
   }
   const b = await req.json().catch(() => ({}));
-  const key = await getWebsiteKey(b.site ?? "main");
-  if (!key) return NextResponse.json({ ok: false, error: "invalid_website" });
+  // Staff quote for their own company; the public for the website they are on.
+  const office = await getOfficeContext();
+  const site = await websiteForRequest(b.site, office?.company.id ?? null);
+  if (!site) return NextResponse.json({ ok: false, error: "invalid_website" });
+  const key = site.api_key;
 
   const outboundRes = await legQuotes(key, b.outbound ?? {});
   if (!outboundRes) return NextResponse.json({ ok: false, error: "quote_failed" });

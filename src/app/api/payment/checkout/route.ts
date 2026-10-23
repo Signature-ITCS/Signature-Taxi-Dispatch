@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getStripe, toMinor } from "@/lib/stripe";
-import { getWebsiteKey } from "@/lib/getWebsiteKey";
+import { resolveWebsite } from "@/lib/tenant";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { priceTrip } from "@/lib/pricing";
 import { quoteSignature } from "@/lib/quoteSignature";
@@ -25,29 +25,32 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
   }
 
+  const b = (await req.json().catch(() => ({}))) as Partial<BookingInput>;
+
+  // The website decides the company — and so whose Stripe account is paid.
+  const website = await resolveWebsite(b.site);
+  if (!website) return NextResponse.json({ ok: false, error: "invalid_website" });
+  const companyId = website.company_id;
+  const site = website.slug;
+  const apiKey = website.api_key;
+
   // A hidden button is not a rule — refuse here too, or a crafted request could
-  // still start a checkout the site is deliberately not offering.
-  if (!cardPaymentsEnabled()) {
+  // still start a checkout the company is deliberately not offering.
+  if (!(await cardPaymentsEnabled(companyId))) {
     return NextResponse.json({ ok: false, error: "card_disabled" });
   }
 
-  const stripe = await getStripe();
+  const stripe = await getStripe(companyId);
   if (!stripe) return NextResponse.json({ ok: false, error: "payments_not_configured" });
-
-  const b = (await req.json().catch(() => ({}))) as Partial<BookingInput>;
 
   // Validate the FULL booking now, not after payment: taking money for a trip
   // we would then refuse to save is the one outcome worth engineering against.
-  await normalizeBookingInput(b);
+  await normalizeBookingInput(b, companyId);
   const invalid = validateBookingInput(b);
   if (invalid) return NextResponse.json({ ok: false, error: invalid });
-  if (!(await categoryBookable(b.category_id as string))) {
+  if (!(await categoryBookable(b.category_id as string, companyId))) {
     return NextResponse.json({ ok: false, error: "category_unavailable" });
   }
-
-  const site = b.site ?? "main";
-  const apiKey = await getWebsiteKey(site);
-  if (!apiKey) return NextResponse.json({ ok: false, error: "invalid_website" });
 
   const input = b as BookingInput;
   const total = await priceTrip(apiKey, {
@@ -94,6 +97,7 @@ export async function POST(req: Request) {
   const { data: reusable } = await admin
     .from("checkout_drafts")
     .select("id, session_id")
+    .eq("company_id", companyId)
     .eq("quote_sig", sig)
     .eq("status", "open")
     .gt("expires_at", new Date().toISOString())
@@ -139,7 +143,7 @@ export async function POST(req: Request) {
           },
         ],
         success_url: `${origin}/booking/complete?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/book?resume=${draftId}`,
+        cancel_url: `${origin}/book/${encodeURIComponent(site)}?resume=${draftId}`,
         // Stripe's minimum window is 30 minutes; the draft expires alongside it.
         expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
         metadata: { draft_id: draftId, site, category_id: input.category_id, quote_sig: sig },
@@ -161,6 +165,7 @@ export async function POST(req: Request) {
   // Park the trip. If this fails the customer could pay for something we can
   // never turn into a booking — so cancel the session rather than risk it.
   const { error } = await admin.from("checkout_drafts").insert({
+    company_id: companyId,
     id: draftId,
     session_id: session.id,
     payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : null,

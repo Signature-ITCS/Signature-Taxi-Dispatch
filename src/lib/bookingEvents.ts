@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendSms, smsEnabled } from "@/lib/sms";
 import { pushToDriver } from "@/lib/push";
 import { sendRideThankYou } from "@/lib/thankYou";
-import { BRAND } from "@/lib/brand";
+import { getCompanyBrand } from "@/lib/companyBrand";
 
 function siteOrigin(fallback?: string): string {
   return (process.env.NEXT_PUBLIC_SITE_URL || fallback || "").replace(/\/$/, "");
@@ -12,6 +12,7 @@ type Admin = ReturnType<typeof createAdminClient>;
 
 interface BookingRow {
   id: string;
+  company_id: string;
   booking_number: string;
   status: string;
   driver_id: string | null;
@@ -43,7 +44,7 @@ export async function handleBookingChange(bookingId: string, origin?: string): P
   const { data } = await admin
     .from("bookings")
     .select(
-      "id, booking_number, status, driver_id, notified_driver_id, customer_whatsapp, pickup_address, dropoff_address, scheduled_at, external_provider, external_driver_name, external_vehicle_color, external_vehicle_make, external_vehicle_model, external_vehicle_plate"
+      "id, company_id, booking_number, status, driver_id, notified_driver_id, customer_whatsapp, pickup_address, dropoff_address, scheduled_at, external_provider, external_driver_name, external_vehicle_color, external_vehicle_make, external_vehicle_model, external_vehicle_plate"
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -99,7 +100,7 @@ async function notifyDriverOfJob(admin: Admin, b: BookingRow, base: string): Pro
 
 /** "Your driver has arrived" text to the customer. */
 async function textCustomerArrived(admin: Admin, b: BookingRow): Promise<boolean> {
-  if (!b.customer_whatsapp || !(await smsEnabled())) return false;
+  if (!b.customer_whatsapp || !(await smsEnabled(b.company_id))) return false;
   const { data: claimed } = await admin
     .from("bookings")
     .update({ arrived_sms_at: new Date().toISOString() })
@@ -111,17 +112,18 @@ async function textCustomerArrived(admin: Admin, b: BookingRow): Promise<boolean
   if (!claimed) return false;
 
   const { name, car } = await driverAndCar(admin, b);
+  const brand = await getCompanyBrand(b.company_id);
   const msg =
-    `${BRAND.name}: Your driver${name ? ` ${name}` : ""} has arrived` +
+    `${brand.name}: Your driver${name ? ` ${name}` : ""} has arrived` +
     `${car ? ` in a ${car}` : ""} and is waiting for you. Ref ${b.booking_number}.`;
-  const ok = await sendSms(b.customer_whatsapp, msg);
+  const ok = await sendSms(b.company_id, b.customer_whatsapp, msg);
   if (!ok) await admin.from("bookings").update({ arrived_sms_at: null }).eq("id", b.id);
   return ok;
 }
 
 /** "Ride complete — thanks" text to the customer, with the review link. */
 async function textCustomerCompleted(admin: Admin, b: BookingRow, base: string): Promise<boolean> {
-  if (!b.customer_whatsapp || !base || !(await smsEnabled())) return false;
+  if (!b.customer_whatsapp || !base || !(await smsEnabled(b.company_id))) return false;
   const { data: claimed } = await admin
     .from("bookings")
     .update({ completed_sms_at: new Date().toISOString() })
@@ -132,10 +134,11 @@ async function textCustomerCompleted(admin: Admin, b: BookingRow, base: string):
     .maybeSingle();
   if (!claimed) return false;
 
+  const brand = await getCompanyBrand(b.company_id);
   const msg =
-    `${BRAND.name}: Your ride ${b.booking_number} is complete. Thanks for travelling with us! ` +
+    `${brand.name}: Your ride ${b.booking_number} is complete. Thanks for travelling with us! ` +
     `Rate your ride: ${base}/track/${encodeURIComponent(b.booking_number)}#review`;
-  const ok = await sendSms(b.customer_whatsapp, msg);
+  const ok = await sendSms(b.company_id, b.customer_whatsapp, msg);
   if (!ok) await admin.from("bookings").update({ completed_sms_at: null }).eq("id", b.id);
   return ok;
 }

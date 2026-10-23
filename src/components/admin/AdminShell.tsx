@@ -26,6 +26,7 @@ import SignOutButton from "@/components/dashboard/SignOutButton";
 import { cn } from "@/lib/format";
 import { LogoMark } from "@/components/Brand";
 import NotificationBell from "@/components/dashboard/NotificationBell";
+import { useBrand } from "@/components/BrandProvider";
 
 const NAV = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
@@ -42,6 +43,7 @@ const NAV = [
   { href: "/admin/websites", label: "Widgets", icon: Code2 },
   { href: "/admin/logs", label: "Activity Logs", icon: ScrollText },
   { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/account", label: "Plan & billing", icon: CreditCard },
 ];
 
 export default function AdminShell({
@@ -53,6 +55,7 @@ export default function AdminShell({
   role?: string;
   children: React.ReactNode;
 }) {
+  const brand = useBrand();
   const pathname = usePathname();
   // Phone menu. Closed again whenever the page changes.
   const [menuOpen, setMenuOpen] = useState(false);
@@ -70,7 +73,7 @@ export default function AdminShell({
         <div className="flex items-center gap-2.5 px-5 py-5">
           <LogoMark size={36} />
           <div className="min-w-0">
-            <p className="font-display text-sm font-bold leading-tight text-ink-950">Cheap Transfers</p>
+            <p className="font-display text-sm font-bold leading-tight text-ink-950">{brand.name}</p>
             <p className="text-xs text-gray-400">Admin</p>
           </div>
           <div className="ml-auto">

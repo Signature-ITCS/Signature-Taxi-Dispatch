@@ -3,7 +3,15 @@
  * Uses table layout + inline styles so it renders in Gmail / Outlook / Apple Mail.
  */
 import { money } from "./format";
-import { BRAND } from "./brand";
+
+/** The sending company (or the platform) — see companyBrand.ts. */
+export interface EmailBrand {
+  name: string;
+  primary: string;
+  dark: string;
+  /** Absolute URL of the logo, or null for the name in text. */
+  logoUrl: string | null;
+}
 
 export interface BookingEmailData {
   bookingNumber: string;
@@ -27,14 +35,12 @@ export interface BookingEmailData {
   siteName?: string;
 }
 
-const ORANGE = BRAND.colors.orange;
-const INK = BRAND.colors.navy;
-
-/** Absolute logo URL — emails can't use relative paths. Null before the site URL is set. */
-function logoUrl(): string | null {
-  const base = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "");
-  return base ? `${base}${BRAND.logo}` : null;
-}
+/**
+ * The brand being rendered. Every exported template sets it on its first line
+ * and renders synchronously (no awaits), so two companies' emails can never
+ * mix even when built at the same time.
+ */
+let B: EmailBrand = { name: "", primary: "#1d4ed8", dark: "#0f172a", logoUrl: null };
 
 function whenLabel(iso?: string | null): string {
   if (!iso) return "As soon as possible";
@@ -62,7 +68,7 @@ function row(label: string, value: string, strong = false): string {
   return `
     <tr>
       <td style="padding:9px 0;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;width:38%;vertical-align:top;">${label}</td>
-      <td style="padding:9px 0;border-bottom:1px solid #f0f0f0;color:${INK};font-size:14px;font-weight:${strong ? 700 : 500};text-align:right;">${value}</td>
+      <td style="padding:9px 0;border-bottom:1px solid #f0f0f0;color:${B.dark};font-size:14px;font-weight:${strong ? 700 : 500};text-align:right;">${value}</td>
     </tr>`;
 }
 
@@ -97,14 +103,14 @@ function shell(opts: { preheader: string; heading: string; sub: string; body: st
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #ececec;">
         <tr><td style="background:#ffffff;padding:22px 28px 18px 28px;">
           ${
-            logoUrl()
-              ? `<img src="${escapeAttr(logoUrl()!)}" width="220" alt="${escapeAttr(BRAND.name)}" style="display:block;width:220px;max-width:100%;height:auto;border:0;">`
-              : `<span style="color:${INK};font-size:18px;font-weight:800;">${escapeHtml(BRAND.name)}</span>`
+            B.logoUrl
+              ? `<img src="${escapeAttr(B.logoUrl)}" width="220" alt="${escapeAttr(B.name)}" style="display:block;width:220px;max-width:100%;height:auto;border:0;">`
+              : `<span style="color:${B.dark};font-size:18px;font-weight:800;">${escapeHtml(B.name)}</span>`
           }
         </td></tr>
-        <tr><td style="height:4px;background:${ORANGE};"></td></tr>
+        <tr><td style="height:4px;background:${B.primary};"></td></tr>
         <tr><td style="padding:28px 28px 8px 28px;">
-          <h1 style="margin:0 0 4px 0;color:${INK};font-size:22px;">${escapeHtml(opts.heading)}</h1>
+          <h1 style="margin:0 0 4px 0;color:${B.dark};font-size:22px;">${escapeHtml(opts.heading)}</h1>
           <p style="margin:0;color:#6b7280;font-size:14px;">${opts.sub}</p>
         </td></tr>
         <tr><td style="padding:12px 28px 28px 28px;">${opts.body}</td></tr>
@@ -120,15 +126,16 @@ function shell(opts: { preheader: string; heading: string; sub: string; body: st
 function button(url: string, label: string): string {
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 4px 0;"><tr>
-      <td style="border-radius:12px;background:${ORANGE};">
+      <td style="border-radius:12px;background:${B.primary};">
         <a href="${escapeAttr(url)}" style="display:inline-block;padding:14px 26px;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;border-radius:12px;">${escapeHtml(label)} →</a>
       </td>
     </tr></table>`;
 }
 
 /** Customer-facing "Booking confirmed" email with a Track button. */
-export function customerConfirmationEmail(d: BookingEmailData): { subject: string; html: string } {
-  const site = d.siteName || BRAND.name;
+export function customerConfirmationEmail(d: BookingEmailData, brand: EmailBrand): { subject: string; html: string } {
+  B = brand;
+  const site = d.siteName || B.name;
   const html = shell({
     preheader: `Your booking ${d.bookingNumber} is confirmed.`,
     heading: "Booking confirmed 🎉",
@@ -145,7 +152,7 @@ export function customerConfirmationEmail(d: BookingEmailData): { subject: strin
       ${
         d.installUrl
           ? `<div style="margin-top:18px;padding-top:18px;border-top:1px solid #f0f0f0;">
-        <p style="margin:0 0 2px 0;color:${INK};font-size:14px;font-weight:600;">Get the app 📲</p>
+        <p style="margin:0 0 2px 0;color:${B.dark};font-size:14px;font-weight:600;">Get the app 📲</p>
         <p style="margin:0 0 8px 0;color:#6b7280;font-size:13px;line-height:1.5;">
           Add ${escapeHtml(site)} to your phone's home screen — track this ride and book the next one in one tap. Open the link on your phone and press <b>Install</b>.
         </p>
@@ -158,12 +165,13 @@ export function customerConfirmationEmail(d: BookingEmailData): { subject: strin
 }
 
 /** Internal alert for dispatch + admin when a new booking arrives. */
-export function staffAlertEmail(d: BookingEmailData, dispatchUrl?: string): { subject: string; html: string } {
+export function staffAlertEmail(d: BookingEmailData, dispatchUrl: string | undefined, brand: EmailBrand): { subject: string; html: string } {
+  B = brand;
   const html = shell({
     preheader: `New booking ${d.bookingNumber} from ${d.customerName}.`,
     heading: "New booking received",
     sub: `A new ride has come in${d.siteName ? ` via ${escapeHtml(d.siteName)}` : ""}. Assign a driver from the dispatch board.`,
-    footer: BRAND.staffAppName,
+    footer: `${B.name} Dispatch`,
     body: `
       ${detailsTable(d)}
       ${dispatchUrl ? `<div style="margin-top:22px;">${button(dispatchUrl, "Open dispatch board")}</div>` : ""}`,
@@ -201,12 +209,13 @@ export interface StaffWelcomeData {
  * login. Contains the credentials, a sign-in button and an "Install the app"
  * button (→ /install page, which triggers the PWA install prompt).
  */
-export function staffWelcomeEmail(d: StaffWelcomeData): { subject: string; html: string } {
-  const site = d.siteName || BRAND.name;
+export function staffWelcomeEmail(d: StaffWelcomeData, brand: EmailBrand): { subject: string; html: string } {
+  B = brand;
+  const site = d.siteName || B.name;
   const first = escapeHtml(d.fullName.split(" ")[0] || "there");
   const roleLabel = d.role === "admin" ? "Administrator" : d.role === "driver" ? "Driver" : "Dispatcher";
   const area = d.role === "admin" ? "admin panel" : d.role === "driver" ? "driver app" : "dispatch board";
-  const appName = d.role === "driver" ? BRAND.driverAppName : BRAND.staffAppName;
+  const appName = d.role === "driver" ? `${B.name} Driver` : `${B.name} Dispatch`;
 
   const credBox = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;background:#fafafa;border:1px solid #ececec;border-radius:12px;">
@@ -219,15 +228,15 @@ export function staffWelcomeEmail(d: StaffWelcomeData): { subject: string; html:
           </tr>
           <tr>
             <td style="padding:6px 0;color:#6b7280;font-size:13px;">Email</td>
-            <td style="padding:6px 0;color:${INK};font-size:14px;font-weight:600;">${escapeHtml(d.email)}</td>
+            <td style="padding:6px 0;color:${B.dark};font-size:14px;font-weight:600;">${escapeHtml(d.email)}</td>
           </tr>
           <tr>
             <td style="padding:6px 0;color:#6b7280;font-size:13px;">Password</td>
-            <td style="padding:6px 0;"><span style="display:inline-block;font-family:SFMono-Regular,Menlo,Consolas,monospace;font-size:15px;font-weight:700;color:${INK};background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:6px 10px;letter-spacing:.04em;">${escapeHtml(d.password)}</span></td>
+            <td style="padding:6px 0;"><span style="display:inline-block;font-family:SFMono-Regular,Menlo,Consolas,monospace;font-size:15px;font-weight:700;color:${B.dark};background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:6px 10px;letter-spacing:.04em;">${escapeHtml(d.password)}</span></td>
           </tr>
           <tr>
             <td style="padding:6px 0;color:#6b7280;font-size:13px;">Role</td>
-            <td style="padding:6px 0;color:${INK};font-size:14px;">${roleLabel}</td>
+            <td style="padding:6px 0;color:${B.dark};font-size:14px;">${roleLabel}</td>
           </tr>
         </table>
       </td></tr>
@@ -238,7 +247,7 @@ export function staffWelcomeEmail(d: StaffWelcomeData): { subject: string; html:
   const steps = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;">
       <tr><td style="padding:12px 0 0 0;border-top:1px solid #f0f0f0;">
-        <p style="margin:0 0 4px 0;color:${INK};font-size:15px;font-weight:700;">Install the app 📲</p>
+        <p style="margin:0 0 4px 0;color:${B.dark};font-size:15px;font-weight:700;">Install the app 📲</p>
         <p style="margin:0 0 8px 0;color:#6b7280;font-size:13px;line-height:1.5;">Add the ${escapeHtml(appName)} app to your phone's home screen or your desktop so the ${area} opens like a normal app, full-screen and one tap away. Open the link below on the device you want to install it on, press <b>Install</b>, then sign in with the details above.</p>
         ${button(d.installUrl, "Install the app")}
       </td></tr>
@@ -264,7 +273,7 @@ export function staffWelcomeEmail(d: StaffWelcomeData): { subject: string; html:
 function installButton(url: string, label: string): string {
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 4px 0;"><tr>
-      <td style="border-radius:12px;background:${INK};">
+      <td style="border-radius:12px;background:${B.dark};">
         <a href="${escapeAttr(url)}" style="display:inline-block;padding:14px 26px;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;border-radius:12px;">⬇&nbsp; ${escapeHtml(label)}</a>
       </td>
     </tr></table>`;
@@ -315,13 +324,14 @@ const ALERT_COPY: Record<PaymentAlertKind, { subject: string; heading: string; s
 };
 
 /** Internal alert to admin/dispatch when money and bookings disagree. */
-export function paymentAlertEmail(d: PaymentAlertData): { subject: string; html: string } {
+export function paymentAlertEmail(d: PaymentAlertData, brand: EmailBrand): { subject: string; html: string } {
+  B = brand;
   const copy = ALERT_COPY[d.kind];
   const html = shell({
     preheader: `${copy.subject} — ${money(d.amount)} · ${d.paymentIntentId}`,
     heading: copy.heading,
     sub: copy.sub,
-    footer: `${BRAND.name} Payments`,
+    footer: `${B.name} Payments`,
     body: `
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
         ${row("Amount", money(d.amount), true)}
@@ -359,35 +369,36 @@ export interface ThankYouData {
 }
 
 /** Sent once a ride is marked completed: thanks, a review link and the app. */
-export function rideThankYouEmail(d: ThankYouData): { subject: string; html: string } {
+export function rideThankYouEmail(d: ThankYouData, brand: EmailBrand): { subject: string; html: string } {
+  B = brand;
   const first = escapeHtml(firstName(d.customerName));
   const html = shell({
-    preheader: `Thanks for riding with ${BRAND.name} — how did we do?`,
+    preheader: `Thanks for riding with ${B.name} — how did we do?`,
     heading: `Thanks for riding with us, ${first}!`,
     sub: `Your ride ${escapeHtml(d.bookingNumber)} is complete. We hope everything went smoothly.`,
-    footer: BRAND.name,
+    footer: B.name,
     body: `
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
         ${row("From", escapeHtml(d.pickup))}
         ${row("To", escapeHtml(d.dropoff))}
       </table>
       <div style="margin-top:22px;">
-        <p style="margin:0 0 2px 0;color:${INK};font-size:15px;font-weight:700;">How was your ride? ⭐</p>
+        <p style="margin:0 0 2px 0;color:${B.dark};font-size:15px;font-weight:700;">How was your ride? ⭐</p>
         <p style="margin:0 0 8px 0;color:#6b7280;font-size:13px;line-height:1.5;">
           It takes ten seconds and helps us keep every journey a good one.
         </p>
         ${button(d.reviewUrl, "Rate your ride")}
       </div>
       <div style="margin-top:18px;padding-top:18px;border-top:1px solid #f0f0f0;">
-        <p style="margin:0 0 2px 0;color:${INK};font-size:14px;font-weight:600;">Book your next ride in one tap 📲</p>
+        <p style="margin:0 0 2px 0;color:${B.dark};font-size:14px;font-weight:600;">Book your next ride in one tap 📲</p>
         <p style="margin:0 0 8px 0;color:#6b7280;font-size:13px;line-height:1.5;">
-          Add ${escapeHtml(BRAND.name)} to your phone's home screen. Open the link on your phone and press <b>Install</b>.
+          Add ${escapeHtml(B.name)} to your phone's home screen. Open the link on your phone and press <b>Install</b>.
         </p>
         ${installButton(d.installUrl, "Download our app")}
-        <p style="margin:12px 0 0 0;font-size:13px;"><a href="${escapeAttr(d.bookUrl)}" style="color:${ORANGE};font-weight:600;text-decoration:none;">Or book online →</a></p>
+        <p style="margin:12px 0 0 0;font-size:13px;"><a href="${escapeAttr(d.bookUrl)}" style="color:${B.primary};font-weight:600;text-decoration:none;">Or book online →</a></p>
       </div>`,
   });
-  return { subject: `Thanks for riding with ${BRAND.name}`, html };
+  return { subject: `Thanks for riding with ${B.name}`, html };
 }
 
 /** "Sam" from "Sam Taylor"; "there" when no name was given ("Customer"). */
@@ -412,7 +423,8 @@ export interface ReminderJob {
 }
 
 /** "Starting within the hour" — flags jobs with no driver or not yet accepted. */
-export function upcomingReminderEmail(jobs: ReminderJob[], dispatchUrl: string): { subject: string; html: string } {
+export function upcomingReminderEmail(jobs: ReminderJob[], dispatchUrl: string, brand: EmailBrand): { subject: string; html: string } {
+  B = brand;
   const noDriver = jobs.filter((j) => !j.driverName).length;
   const time = (iso: string) =>
     new Date(iso).toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
@@ -425,7 +437,7 @@ export function upcomingReminderEmail(jobs: ReminderJob[], dispatchUrl: string):
           : `${escapeHtml(j.driverName)} · <span style="color:#d95a04;font-weight:700;">not accepted yet</span>`;
       return `
         <tr><td style="padding:12px 0;border-bottom:1px solid #f0f0f0;">
-          <p style="margin:0;color:${INK};font-size:15px;font-weight:700;">${time(j.scheduledAt)} · ${escapeHtml(j.bookingNumber)}</p>
+          <p style="margin:0;color:${B.dark};font-size:15px;font-weight:700;">${time(j.scheduledAt)} · ${escapeHtml(j.bookingNumber)}</p>
           <p style="margin:2px 0 0 0;color:#374151;font-size:13px;">${escapeHtml(j.pickup)} → ${escapeHtml(j.dropoff)}</p>
           <p style="margin:2px 0 0 0;color:#6b7280;font-size:13px;">${escapeHtml(j.customerName)} · ${state}</p>
         </td></tr>`;
@@ -437,7 +449,7 @@ export function upcomingReminderEmail(jobs: ReminderJob[], dispatchUrl: string):
     sub: noDriver
       ? `${noDriver} of these ${noDriver === 1 ? "has" : "have"} no driver yet — assign one now.`
       : "Every job below has a driver. Check the ones not accepted yet.",
-    footer: BRAND.staffAppName,
+    footer: `${B.name} Dispatch`,
     body: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${rows}</table>
       <div style="margin-top:22px;">${button(dispatchUrl, "Open dispatch board")}</div>`,
   });

@@ -1,12 +1,9 @@
-// Cheap Transfers service worker — app-shell caching + offline fallback
-const CACHE = "cheaptransfers-v3";
+// Dispatch platform service worker — app-shell caching + offline fallback
+const CACHE = "dispatch-platform-v4";
 const PRECACHE = [
   "/offline.html",
   "/icon-192.png",
   "/icon-512.png",
-  "/brand/logo.png",
-  "/brand/mark.png",
-  "/manifest.webmanifest",
 ];
 
 self.addEventListener("install", (event) => {
@@ -71,7 +68,7 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: "Cheap Transfers", body: event.data ? event.data.text() : "" };
+    data = { title: "New notification", body: event.data ? event.data.text() : "" };
   }
   event.waitUntil(
     self.registration.showNotification(data.title || "New job", {

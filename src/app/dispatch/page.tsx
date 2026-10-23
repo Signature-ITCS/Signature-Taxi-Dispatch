@@ -1092,7 +1092,7 @@ function ManualBookingModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="p-4">
-          <BookingWidget site="main" manual />
+          <BookingWidget manual />
         </div>
       </motion.div>
     </div>

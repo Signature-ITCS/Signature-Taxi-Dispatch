@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { getWebsiteKey } from "@/lib/getWebsiteKey";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getSessionProfile } from "@/lib/auth";
+import { getOfficeContext, websiteForRequest } from "@/lib/tenant";
 import { rateLimit, clientIp } from "@/lib/rateLimit";
 import { splitFare } from "@/lib/fare";
 import {
@@ -30,19 +29,23 @@ export async function POST(req: Request) {
 
   const b = (await req.json().catch(() => ({}))) as Partial<BookingInput> & { custom_fare?: unknown };
 
-  await normalizeBookingInput(b);
+  // Resolved once: it decides which company this is for, who may book a card
+  // ride, and whose hand-typed distance we are willing to believe. Staff always
+  // book into their own company.
+  const office = await getOfficeContext();
+  const isStaff = !!office;
+  const site = await websiteForRequest(b.site, office?.company.id ?? null);
+  if (!site) return NextResponse.json({ ok: false, error: "invalid_website" });
+  const companyId = site.company_id;
+
+  await normalizeBookingInput(b, companyId);
   const invalid = validateBookingInput(b);
   if (invalid) return NextResponse.json({ ok: false, error: invalid });
 
   const input = b as BookingInput;
-  if (!(await categoryBookable(input.category_id))) {
+  if (!(await categoryBookable(input.category_id, companyId))) {
     return NextResponse.json({ ok: false, error: "category_unavailable" });
   }
-
-  // Resolved once: it decides both who may book a card ride and whose
-  // hand-typed distance we are willing to believe.
-  const me = await getSessionProfile();
-  const isStaff = !!me && (me.role === "admin" || me.role === "dispatcher");
 
   // A card ride must be paid before it exists. Refusing here stops a crafted
   // request from booking a card trip for free.
@@ -50,13 +53,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "use_checkout" });
   }
 
-  const key = await getWebsiteKey(input.site ?? "main");
-  if (!key) return NextResponse.json({ ok: false, error: "invalid_website" });
-
   // Only staff may book without coordinates (a phone booking with a typed
   // address). For the public, no coordinates means no price — see
   // resolveLegDistance().
-  const created = await createTrip(input, key, { trustClient: isStaff });
+  const created = await createTrip(input, site, { trustClient: isStaff });
   if ("error" in created) {
     return NextResponse.json(created.error);
   }
@@ -92,7 +92,8 @@ export async function POST(req: Request) {
               note: "Custom price set by staff (outbound share)",
             },
           })
-          .eq("id", outboundId);
+          .eq("id", outboundId)
+          .eq("company_id", companyId);
         await admin
           .from("bookings")
           .update({
@@ -104,7 +105,8 @@ export async function POST(req: Request) {
               note: "Custom price set by staff (return share)",
             },
           })
-          .eq("id", returnId);
+          .eq("id", returnId)
+          .eq("company_id", companyId);
       } else {
         await admin
           .from("bookings")
@@ -112,7 +114,8 @@ export async function POST(req: Request) {
             estimated_fare: overrideFare,
             fare_breakdown: { total: overrideFare, custom: true, note: "Custom price set by staff" },
           })
-          .eq("id", outboundId);
+          .eq("id", outboundId)
+          .eq("company_id", companyId);
       }
     }
   }
@@ -120,7 +123,7 @@ export async function POST(req: Request) {
   const totalFare = overrideFare ?? created.total;
   const origin = process.env.NEXT_PUBLIC_SITE_URL || new URL(req.url).origin;
 
-  await notifyBooking({ input, trip: created, totalFare, paid: false, origin });
+  await notifyBooking({ companyId, input, trip: created, totalFare, paid: false, origin });
 
   return NextResponse.json({
     ok: true,

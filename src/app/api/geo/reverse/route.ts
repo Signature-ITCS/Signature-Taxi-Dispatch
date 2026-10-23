@@ -40,7 +40,7 @@ export async function GET(req: Request) {
       `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=17&addressdetails=1&lat=${lat}&lon=${lng}`,
       {
         headers: {
-          "User-Agent": "CheapTransfersDispatch/1.0 (dispatch.airport-transfer.uk)",
+          "User-Agent": "DispatchPlatform/1.0 (booking.airport-transfer.uk)",
           "Accept-Language": "en-GB,en",
         },
         signal: AbortSignal.timeout(8000),

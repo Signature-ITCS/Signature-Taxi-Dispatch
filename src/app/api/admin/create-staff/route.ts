@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
-import { getSessionProfile } from "@/lib/auth";
+import { getOfficeContext } from "@/lib/tenant";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { tenantDb } from "@/lib/tenantDb";
+import { getCompanyBrand } from "@/lib/companyBrand";
 import { sendEmail, emailEnabled } from "@/lib/email";
 import { staffWelcomeEmail } from "@/lib/emailTemplates";
 
 /** Admin-only: create a dispatcher/admin login. Needs SERVICE_ROLE key. Drivers are records (no login). */
 export async function POST(req: Request) {
-  const me = await getSessionProfile();
-  if (!me || me.role !== "admin") {
+  const office = await getOfficeContext({ adminOnly: true });
+  if (!office) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 403 });
   }
+  const me = office.profile;
+  const companyId = office.company.id;
 
   let admin;
   try {
@@ -39,9 +43,17 @@ export async function POST(req: Request) {
   }
 
   const uid = data.user.id;
-  await admin.from("profiles").insert({ id: uid, full_name, email, phone: phone ?? null, role });
+  const { error: profileErr } = await tenantDb(companyId)
+    .from("profiles")
+    .insert({ id: uid, full_name, email, phone: phone ?? null, role });
+  if (profileErr) {
+    // Most likely the plan's office-user limit. Don't leave a login behind.
+    await admin.auth.admin.deleteUser(uid);
+    const limit = /plan_limit_staff/.test(profileErr.message);
+    return NextResponse.json({ ok: false, error: limit ? "plan_limit_staff" : "create_failed" });
+  }
 
-  await admin.from("activity_logs").insert({
+  await tenantDb(companyId).from("activity_logs").insert({
     actor_id: me.id,
     actor_name: me.full_name,
     actor_role: me.role,
@@ -53,7 +65,7 @@ export async function POST(req: Request) {
   // Best-effort: the account is already created, so an email failure must
   // never fail the request — we just tell the admin it didn't go out.
   let emailed = false;
-  if (await emailEnabled()) {
+  if (await emailEnabled(companyId)) {
     try {
       const origin = process.env.NEXT_PUBLIC_SITE_URL || new URL(req.url).origin;
       const mail = staffWelcomeEmail({
@@ -62,10 +74,10 @@ export async function POST(req: Request) {
         password,
         role,
         loginUrl: `${origin}/login`,
-        installUrl: `${origin}/install/staff`,
+        installUrl: `${origin}/install/staff/${office.company.slug}`,
         invitedBy: me.full_name || null,
-      });
-      emailed = await sendEmail({ to: email, subject: mail.subject, html: mail.html });
+      }, await getCompanyBrand(companyId));
+      emailed = await sendEmail({ companyId, to: email, subject: mail.subject, html: mail.html });
     } catch {
       emailed = false;
     }

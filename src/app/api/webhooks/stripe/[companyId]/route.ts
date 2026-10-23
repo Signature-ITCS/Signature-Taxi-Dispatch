@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe, webhookSecret, fromMinor } from "@/lib/stripe";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { tenantDb, type TenantDb } from "@/lib/tenantDb";
+import { getCompany } from "@/lib/tenant";
 import { alertStaffPayment, sweepUnmatchedPayments } from "@/lib/paymentAlerts";
 import { redeemCheckoutSession } from "@/lib/checkoutRedeem";
 
@@ -14,25 +15,34 @@ import { redeemCheckoutSession } from "@/lib/checkoutRedeem";
  * the Stripe Dashboard never reaches our database, and a chargeback arrives
  * silently. Everything here is idempotent: Stripe retries deliveries for days.
  *
- * Setup: Stripe Dashboard → Developers → Webhooks → add
- *   https://<your-domain>/api/webhooks/stripe
- * subscribed to checkout.session.completed, checkout.session.expired,
+ * One endpoint per company: /api/webhooks/stripe/<company id>, shown in that
+ * company's Admin → Settings → Card payments. In its Stripe Dashboard →
+ * Developers → Webhooks it adds that URL, subscribed to
+ * checkout.session.completed, checkout.session.expired,
  * payment_intent.succeeded, payment_intent.payment_failed, charge.refunded,
- * charge.dispute.created, charge.dispute.closed — then put the signing secret in
- * STRIPE_WEBHOOK_SECRET.
+ * charge.dispute.created, charge.dispute.closed — and saves the signing secret
+ * in the same settings card.
+ *
+ * The company holds its own signing secret, so it could sign events itself.
+ * Every handler therefore works through tenantDb(companyId): whatever an event
+ * says, it can only ever touch that company's own rows.
  *
  * checkout.session.completed is the important one: it is what turns a paid
  * Checkout into a booking when the customer never makes it back to the site.
  */
 
-type Admin = ReturnType<typeof createAdminClient>;
+type Admin = TenantDb;
 
-export async function POST(req: Request) {
-  const stripe = await getStripe();
-  const secret = webhookSecret();
+export async function POST(req: Request, ctx: { params: Promise<{ companyId: string }> }) {
+  const { companyId } = await ctx.params;
+  if (!/^[0-9a-f-]{36}$/i.test(companyId) || !(await getCompany(companyId))) {
+    return NextResponse.json({ ok: false, error: "unknown_company" }, { status: 404 });
+  }
+  const stripe = await getStripe(companyId);
+  const secret = await webhookSecret(companyId);
   if (!stripe || !secret) {
     // Returning 200 would make Stripe think it was delivered and drop it.
-    console.error("[stripe-webhook] STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET not configured");
+    console.error("[stripe-webhook] company", companyId, "has no Stripe key / webhook secret saved");
     return NextResponse.json({ ok: false, error: "not_configured" }, { status: 503 });
   }
 
@@ -51,7 +61,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "bad_signature" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
+  const admin = tenantDb(companyId);
 
   // Exactly-once: the primary key rejects a redelivery of an event we already
   // handled, and we answer 200 so Stripe stops retrying it.
@@ -68,7 +78,7 @@ export async function POST(req: Request) {
   try {
     switch (event.type) {
       case "checkout.session.completed":
-        await onCheckoutCompleted(stripe, event.data.object, origin);
+        await onCheckoutCompleted(admin, event.data.object, origin);
         break;
       case "checkout.session.expired":
         await onCheckoutExpired(admin, event.data.object);
@@ -146,9 +156,13 @@ async function isOurPayment(
  * Redemption is locked on the draft row, so this and /booking/complete racing
  * each other still produces exactly one booking.
  */
-async function onCheckoutCompleted(stripe: Stripe, session: Stripe.Checkout.Session, origin: string) {
+async function onCheckoutCompleted(admin: Admin, session: Stripe.Checkout.Session, origin: string) {
   if (session.payment_status !== "paid") return;
-  const result = await redeemCheckoutSession(stripe, session.id, origin);
+  // Only this company's own checkouts. (Redemption then re-checks the payment
+  // with the draft's own Stripe account — the event itself is never trusted.)
+  const { data: draft } = await admin.from("checkout_drafts").select("id").eq("session_id", session.id).maybeSingle();
+  if (!draft) return;
+  const result = await redeemCheckoutSession(session.id, origin);
   // Not an error we can retry out of — a draft that no longer exists stays
   // unmatched, and the payments sweep is what puts it in front of staff.
   if (!result.ok && result.error !== "unknown_session") {
@@ -203,7 +217,7 @@ async function onPaymentSucceeded(admin: Admin, pi: Stripe.PaymentIntent) {
     return;
   }
 
-  const receiptUrl = await receiptFor(pi);
+  const receiptUrl = await receiptFor(admin.companyId, pi);
   const orphan = !booking?.id;
 
   const { error } = await admin.from("payments").insert({
@@ -344,6 +358,7 @@ async function onDisputeOpened(admin: Admin, dispute: Stripe.Dispute, origin: st
   });
 
   await alertStaffPayment(
+    admin.companyId,
     {
       kind: "dispute",
       amount,
@@ -376,12 +391,12 @@ async function onDisputeClosed(admin: Admin, dispute: Stripe.Dispute) {
 /* ── helpers ───────────────────────────────────────────────────────────────── */
 
 /** The Stripe-hosted receipt, fetched only when the event didn't carry it. */
-async function receiptFor(pi: Stripe.PaymentIntent): Promise<string | null> {
+async function receiptFor(companyId: string, pi: Stripe.PaymentIntent): Promise<string | null> {
   const charge = pi.latest_charge;
   if (charge && typeof charge === "object") return charge.receipt_url ?? null;
   if (typeof charge !== "string") return null;
   try {
-    const stripe = await getStripe();
+    const stripe = await getStripe(companyId);
     if (!stripe) return null;
     const c = await stripe.charges.retrieve(charge);
     return c.receipt_url ?? null;

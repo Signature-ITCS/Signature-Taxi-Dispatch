@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getSessionProfile } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getOfficeContext } from "@/lib/tenant";
+import { createClient } from "@/lib/supabase/server";
+import { tenantDb } from "@/lib/tenantDb";
 import { isValidPhone } from "@/lib/format";
 
 /**
@@ -24,8 +25,9 @@ type Method = (typeof METHODS)[number];
 type PayStatus = (typeof PAY_STATUSES)[number];
 
 export async function POST(req: Request) {
-  const me = await getSessionProfile();
-  if (!me || (me.role !== "admin" && me.role !== "dispatcher")) {
+  const office = await getOfficeContext();
+  const me = office?.profile;
+  if (!office || !me) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 403 });
   }
 
@@ -60,14 +62,10 @@ export async function POST(req: Request) {
   // explicitly rather than guessed at.
   const payStatus: PayStatus = PAY_STATUSES.includes(b.payment_status) ? b.payment_status : "pending";
 
-  let admin;
-  try {
-    admin = createAdminClient();
-  } catch {
-    return NextResponse.json({ ok: false, error: "no_service_role_key" });
-  }
-
-  const { data, error } = await admin.rpc("create_external_booking", {
+  // Runs as the signed-in staff member: the database puts it in their own
+  // company and applies its row-level security inside the function.
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("create_external_booking", {
     p_customer_name: name,
     p_whatsapp: whatsapp,
     p_pickup_address: pickup,
@@ -95,7 +93,7 @@ export async function POST(req: Request) {
   const result = data as { ok: boolean; error?: string; booking_id?: string; booking_number?: string };
   if (!result?.ok) return NextResponse.json(result ?? { ok: false, error: "no_response" });
 
-  await admin.from("activity_logs").insert({
+  await tenantDb(office.company.id).from("activity_logs").insert({
     actor_id: me.id,
     actor_name: me.full_name,
     actor_role: me.role,

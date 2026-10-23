@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getStripe } from "@/lib/stripe";
 import { redeemCheckoutSession } from "@/lib/checkoutRedeem";
 import { rateLimit, clientIp } from "@/lib/rateLimit";
 
@@ -15,15 +14,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
   }
 
-  const stripe = await getStripe();
-  if (!stripe) return NextResponse.json({ ok: false, error: "payments_not_configured" });
-
   const { session_id } = await req.json().catch(() => ({}));
   if (!session_id || typeof session_id !== "string") {
     return NextResponse.json({ ok: false, error: "missing_session" });
   }
 
   const origin = process.env.NEXT_PUBLIC_SITE_URL || new URL(req.url).origin;
-  const result = await redeemCheckoutSession(stripe, session_id, origin);
+  const result = await redeemCheckoutSession(session_id, origin);
   return NextResponse.json(result);
 }

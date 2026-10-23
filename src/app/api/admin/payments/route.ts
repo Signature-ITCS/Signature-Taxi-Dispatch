@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getSessionProfile } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getOfficeContext } from "@/lib/tenant";
+import { tenantDb } from "@/lib/tenantDb";
 import { sweepUnmatchedPayments } from "@/lib/paymentAlerts";
 
 /**
@@ -12,17 +12,12 @@ import { sweepUnmatchedPayments } from "@/lib/paymentAlerts";
  * chased about an orphaned payment on a quiet day with no webhook traffic.
  */
 export async function GET(req: Request) {
-  const me = await getSessionProfile();
-  if (!me || me.role !== "admin") {
+  const office = await getOfficeContext({ adminOnly: true });
+  if (!office) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 403 });
   }
-
-  let admin;
-  try {
-    admin = createAdminClient();
-  } catch {
-    return NextResponse.json({ ok: false, error: "no_service_role_key" });
-  }
+  // This company's payments only.
+  const admin = tenantDb(office.company.id);
 
   const url = new URL(req.url);
   const filter = url.searchParams.get("filter") ?? "all";

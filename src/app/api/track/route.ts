@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { callRpc } from "@/lib/supabaseRest";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit, clientIp } from "@/lib/rateLimit";
+import { getCompanyBrand } from "@/lib/companyBrand";
 
 interface RideStatus {
   ok?: boolean;
@@ -26,6 +27,23 @@ export async function POST(req: Request) {
   const ref = String(b.ref).trim();
   const { data } = await callRpc<RideStatus>("get_ride_status", { p_booking_number: ref });
   if (!data) return NextResponse.json({ ok: false, error: "no_response" });
+
+  // Whose ride it is: the page shows that company's name, colours and logo.
+  if (data.ok) {
+    try {
+      const { data: owner } = await createAdminClient()
+        .from("bookings")
+        .select("company_id")
+        .eq("booking_number", ref)
+        .maybeSingle();
+      if (owner?.company_id) {
+        const brand = await getCompanyBrand(owner.company_id as string);
+        data.brand = { name: brand.name, primary: brand.primary, dark: brand.dark, logoUrl: brand.logoUrl, slug: brand.slug };
+      }
+    } catch {
+      /* tracking still works unbranded */
+    }
+  }
 
   // Jobs handed to an outside driver have no `drivers` row, so get_ride_status
   // returns no driver at all. Fill it in from the booking so the customer still

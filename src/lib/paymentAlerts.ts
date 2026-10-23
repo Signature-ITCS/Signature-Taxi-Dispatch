@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, emailEnabled } from "@/lib/email";
 import { staffAlertRecipients } from "@/lib/notifyStaff";
 import { paymentAlertEmail, type PaymentAlertData } from "@/lib/emailTemplates";
+import { getCompanyBrand } from "@/lib/companyBrand";
 
 function siteOrigin(fallback?: string): string {
   return process.env.NEXT_PUBLIC_SITE_URL || fallback || "";
@@ -13,19 +14,23 @@ function siteOrigin(fallback?: string): string {
  * `alerted_at` null so the sweep below retries later.
  */
 export async function alertStaffPayment(
+  companyId: string,
   d: Omit<PaymentAlertData, "paymentsUrl">,
   origin?: string
 ): Promise<boolean> {
   try {
-    if (!(await emailEnabled())) return false;
-    const to = await staffAlertRecipients();
+    if (!(await emailEnabled(companyId))) return false;
+    const to = await staffAlertRecipients(companyId);
     if (!to.length) return false;
     const base = siteOrigin(origin);
-    const mail = paymentAlertEmail({
-      ...d,
-      ...(base ? { paymentsUrl: `${base}/admin/payments` } : {}),
-    });
-    return await sendEmail({ to, subject: mail.subject, html: mail.html });
+    const mail = paymentAlertEmail(
+      {
+        ...d,
+        ...(base ? { paymentsUrl: `${base}/admin/payments` } : {}),
+      },
+      await getCompanyBrand(companyId)
+    );
+    return await sendEmail({ companyId, to, subject: mail.subject, html: mail.html });
   } catch {
     return false;
   }
@@ -52,7 +57,7 @@ export async function sweepUnmatchedPayments(origin?: string): Promise<number> {
 
     const { data: rows } = await admin
       .from("payments")
-      .select("id, booking_id, amount, stripe_payment_intent_id, receipt_url, needs_review, review_reason, created_at")
+      .select("id, company_id, booking_id, amount, stripe_payment_intent_id, receipt_url, needs_review, review_reason, created_at")
       .eq("status", "paid")
       .is("alerted_at", null)
       .lt("created_at", cutoff)
@@ -62,6 +67,7 @@ export async function sweepUnmatchedPayments(origin?: string): Promise<number> {
 
     for (const r of (rows ?? []) as {
       id: string;
+      company_id: string;
       booking_id: string | null;
       amount: number;
       stripe_payment_intent_id: string | null;
@@ -69,6 +75,7 @@ export async function sweepUnmatchedPayments(origin?: string): Promise<number> {
       review_reason: string | null;
     }[]) {
       const ok = await alertStaffPayment(
+        r.company_id,
         {
           kind: r.booking_id ? "review" : "unmatched",
           amount: Number(r.amount) || 0,

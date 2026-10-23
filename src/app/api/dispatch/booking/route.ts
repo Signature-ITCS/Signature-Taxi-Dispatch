@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSessionProfile } from "@/lib/auth";
+import { getOfficeContext, companyWebsite } from "@/lib/tenant";
 import { callRpc } from "@/lib/supabaseRest";
 import { isValidPhone } from "@/lib/format";
 
-const WIDGET_KEY = process.env.WIDGET_API_KEY!;
-
 /** Staff-only: create a manual (phone/office) booking via the tested create_booking RPC. */
 export async function POST(req: Request) {
-  const me = await getSessionProfile();
-  if (!me || (me.role !== "dispatcher" && me.role !== "admin")) {
+  const office = await getOfficeContext();
+  if (!office) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 403 });
   }
   const b = await req.json().catch(() => ({}));
@@ -18,8 +16,11 @@ export async function POST(req: Request) {
   if (!isValidPhone(b.whatsapp)) {
     return NextResponse.json({ ok: false, error: "invalid_phone" });
   }
+  // Always the staff member's own company's website.
+  const site = await companyWebsite(office.company.id);
+  if (!site) return NextResponse.json({ ok: false, error: "invalid_website" });
   const { data } = await callRpc("create_booking", {
-    p_api_key: WIDGET_KEY,
+    p_api_key: site.api_key,
     p_customer_name: b.name,
     p_whatsapp: b.whatsapp,
     p_pickup_address: b.pickup,

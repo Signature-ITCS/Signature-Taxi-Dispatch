@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Loader2, Printer, ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { money, dateTime, cn } from "@/lib/format";
+import { useBrand } from "@/components/BrandProvider";
 import { fetchReportRows, filtersFromParams, fareOf, driverOf, type ReportRow } from "@/lib/bookingReport";
 
 /**
@@ -28,6 +29,7 @@ export default function BookingsPrintPage() {
 }
 
 function Report() {
+  const brand = useBrand();
   const params = useSearchParams();
   const supabase = createClient();
   const filters = filtersFromParams(new URLSearchParams(params.toString()));
@@ -169,7 +171,7 @@ function Report() {
       )}
 
       <p className="mt-6 text-[10px] text-gray-400">
-        Cheap Transfers · {rows.length} booking{rows.length === 1 ? "" : "s"} · {rangeLabel}
+        {brand.name} · {rows.length} booking{rows.length === 1 ? "" : "s"} · {rangeLabel}
       </p>
     </div>
   );

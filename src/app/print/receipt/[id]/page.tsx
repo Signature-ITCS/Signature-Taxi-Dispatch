@@ -5,7 +5,8 @@ import { useParams, useSearchParams } from "next/navigation";
 import { Loader2, Printer, Download, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { money, dateTime, dateTimeFull } from "@/lib/format";
-import { BRAND } from "@/lib/brand";
+import { useBrand } from "@/components/BrandProvider";
+import { Logo } from "@/components/Brand";
 import type { Booking, FareBreakdown } from "@/lib/types";
 
 /**
@@ -40,6 +41,8 @@ export default function ReceiptPage() {
 }
 
 function Receipt() {
+  // The company whose receipt this is (from the print layout).
+  const BRAND = useBrand();
   const { id } = useParams<{ id: string }>();
   const params = useSearchParams();
   const wantsPdf = params.get("pdf") === "1";
@@ -143,9 +146,9 @@ function Receipt() {
         <div className="flex items-start justify-between gap-6 border-b border-gray-200 pb-5">
           <div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={BRAND.logo} alt={BRAND.name} className="h-12 w-auto" />
+            <Logo height={48} className="h-12 w-auto" />
             <div className="mt-3 text-xs leading-relaxed text-gray-500">
-              <p className="font-semibold text-ink-950">{BRAND.legalName}</p>
+              <p className="font-semibold text-ink-950">{BRAND.legalName || BRAND.name}</p>
               {BRAND.contact?.address && <p>{BRAND.contact.address}</p>}
               <p>
                 {[BRAND.contact?.phone, BRAND.contact?.email, BRAND.contact?.website].filter(Boolean).join(" · ")}

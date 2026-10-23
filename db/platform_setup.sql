@@ -3910,6 +3910,23 @@ create unique index if not exists customers_company_whatsapp_key on public.custo
 alter table public.app_settings drop constraint if exists app_settings_pkey;
 create unique index if not exists app_settings_company_key on public.app_settings (company_id, key);
 
+-- Stripe ids are unique per company: each company's webhook is signed with a
+-- secret that company holds, so one company must not be able to "use up"
+-- another's event or payment ids.
+do $$
+begin
+  if exists (select 1 from pg_constraint
+              where conname = 'stripe_events_pkey' and conrelid = 'public.stripe_events'::regclass
+                and array_length(conkey, 1) = 1) then
+    alter table public.stripe_events drop constraint stripe_events_pkey;
+    alter table public.stripe_events add constraint stripe_events_pkey primary key (company_id, id);
+  end if;
+end $$;
+drop index if exists public.payments_stripe_payment_intent_id_key;
+create unique index if not exists payments_company_intent_key
+  on public.payments (company_id, stripe_payment_intent_id)
+  where stripe_payment_intent_id is not null;
+
 -- Hot paths filter by company first.
 create index if not exists bookings_company_created_idx on public.bookings (company_id, created_at desc);
 create index if not exists bookings_company_status_idx on public.bookings (company_id, status);
@@ -4547,7 +4564,94 @@ drop trigger if exists b_guard_profile_company on public.profiles;
 create trigger b_guard_profile_company before insert or update on public.profiles
   for each row execute function public.guard_profile_company();
 
--- ── 10. Grants and checks ────────────────────────────────────────────────────
+-- ── 10. Backups and restore ──────────────────────────────────────────────────
+-- The app exports each company every night to the private "company-backups"
+-- bucket (JSON, one key per table). Logos go in the public "branding" bucket.
+do $$
+begin
+  if to_regclass('storage.buckets') is not null then
+    insert into storage.buckets (id, name, public) values ('branding', 'branding', true) on conflict (id) do nothing;
+    insert into storage.buckets (id, name, public) values ('company-backups', 'company-backups', false) on conflict (id) do nothing;
+  end if;
+end $$;
+
+-- Put ONE company's data back to a backup, in one transaction: either all of it
+-- is restored or nothing changes. Other companies are never touched. Logins
+-- (profiles) are kept as they are now; drivers keep their login only if it
+-- still exists. Money already moved in Stripe and messages already sent can't
+-- be undone by this — it only restores what is in the database.
+--
+-- Triggers are switched off while the rows go back in (no SMS, no
+-- notifications, no plan limits, no renumbering) and switched on again before
+-- the transaction ends, so no other session ever sees them off. Service role
+-- only: called by the app after it has checked who is asking.
+create or replace function public.restore_company(p_company uuid, p_data jsonb)
+returns jsonb language plpgsql security definer set search_path to 'public' as $$
+declare
+  -- Children first for deleting; reversed for inserting.
+  t_delete text[] := array[
+    'staff_notifications', 'ride_events', 'ratings', 'payments', 'cash_settlements',
+    'push_subscriptions', 'driver_locations', 'checkout_drafts', 'bookings', 'customers',
+    'vehicles', 'drivers', 'fixed_routes', 'pricing_zones', 'pricing_bands', 'pricing_rules',
+    'vehicle_categories', 'websites', 'app_settings', 'activity_logs'];
+  t_insert text[] := array[
+    'app_settings', 'websites', 'vehicle_categories', 'pricing_rules', 'pricing_bands',
+    'pricing_zones', 'fixed_routes', 'drivers', 'vehicles', 'customers', 'bookings',
+    'payments', 'ride_events', 'ratings', 'cash_settlements', 'staff_notifications', 'activity_logs'];
+  t text;
+  rows jsonb;
+  n int;
+  counts jsonb := '{}'::jsonb;
+begin
+  if p_company is null or not exists (select 1 from companies where id = p_company) then
+    raise exception 'No such company';
+  end if;
+  if jsonb_typeof(p_data -> 'tables') <> 'object' then
+    raise exception 'Not a backup file';
+  end if;
+  if (p_data ->> 'company_id') is distinct from p_company::text then
+    raise exception 'This backup belongs to another company';
+  end if;
+
+  foreach t in array t_delete loop
+    execute format('alter table public.%I disable trigger user', t);
+  end loop;
+
+  foreach t in array t_delete loop
+    execute format('delete from public.%I where company_id = $1', t) using p_company;
+  end loop;
+
+  foreach t in array t_insert loop
+    rows := coalesce(p_data -> 'tables' -> t, '[]'::jsonb);
+    if jsonb_typeof(rows) <> 'array' then continue; end if;
+    -- Every row is forced into this company, whatever the file says.
+    rows := coalesce((select jsonb_agg(r || jsonb_build_object('company_id', p_company)) from jsonb_array_elements(rows) r), '[]'::jsonb);
+    if t = 'drivers' then
+      rows := coalesce((select jsonb_agg(case when exists (select 1 from profiles p where p.id = (r ->> 'profile_id')::uuid and p.company_id = p_company)
+                                              then r else r || '{"profile_id": null}'::jsonb end)
+                          from jsonb_array_elements(rows) r), '[]'::jsonb);
+    elsif t = 'bookings' then
+      -- The office user who took a booking may have been deleted since.
+      rows := coalesce((select jsonb_agg(case when (r ->> 'dispatcher_id') is null
+                                                or exists (select 1 from profiles p where p.id = (r ->> 'dispatcher_id')::uuid and p.company_id = p_company)
+                                              then r else r || '{"dispatcher_id": null}'::jsonb end)
+                          from jsonb_array_elements(rows) r), '[]'::jsonb);
+    end if;
+    execute format('insert into public.%I select * from jsonb_populate_recordset(null::public.%I, $1)', t, t) using rows;
+    get diagnostics n = row_count;
+    counts := counts || jsonb_build_object(t, n);
+  end loop;
+
+  foreach t in array t_delete loop
+    execute format('alter table public.%I enable trigger user', t);
+  end loop;
+
+  return jsonb_build_object('ok', true, 'rows', counts);
+end $$;
+revoke execute on function public.restore_company(uuid, jsonb) from anon, authenticated, public;
+grant execute on function public.restore_company(uuid, jsonb) to service_role;
+
+-- ── 11. Grants and checks ────────────────────────────────────────────────────
 grant execute on function public.current_company_id() to anon, authenticated, service_role;
 grant execute on function public.is_platform_admin() to authenticated, service_role;
 grant execute on function public.company_usage(uuid) to service_role;

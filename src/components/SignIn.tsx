@@ -34,11 +34,18 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user || cancelled) return;
+      // The platform owner has no company profile — their screens are /master.
+      const { data: isOwner } = await supabase.rpc("is_platform_admin");
+      if (cancelled) return;
+      if (isOwner) {
+        router.replace("/master");
+        return;
+      }
       const { data: profile } = await supabase
         .from("profiles")
         .select("role, is_active")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
       if (cancelled || !profile?.is_active) return;
       router.replace(params.get("next") || HOME[profile.role] || "/");
     })();
@@ -60,11 +67,18 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
       return;
     }
 
+    const { data: isOwner } = await supabase.rpc("is_platform_admin");
+    if (isOwner) {
+      router.push("/master");
+      router.refresh();
+      return;
+    }
+
     const { data: profile } = await supabase
       .from("profiles")
       .select("role, is_active")
       .eq("id", data.user.id)
-      .single();
+      .maybeSingle();
 
     if (!profile || !profile.is_active) {
       setLoading(false);

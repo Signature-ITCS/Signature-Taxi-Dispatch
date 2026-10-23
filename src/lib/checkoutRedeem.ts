@@ -1,7 +1,7 @@
 import type Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getWebsiteKey } from "@/lib/getWebsiteKey";
-import { fromMinor } from "@/lib/stripe";
+import { websiteForRequest } from "@/lib/tenant";
+import { fromMinor, getStripe } from "@/lib/stripe";
 import { splitFare } from "@/lib/fare";
 import { createTrip, notifyBooking, validateBookingInput, type BookingInput } from "@/lib/bookingFlow";
 
@@ -30,6 +30,7 @@ type Admin = ReturnType<typeof createAdminClient>;
 
 interface DraftRow {
   id: string;
+  company_id: string;
   session_id: string;
   payload: BookingInput;
   amount: number;
@@ -39,21 +40,24 @@ interface DraftRow {
   booking_number: string | null;
 }
 
-export async function redeemCheckoutSession(
-  stripe: Stripe,
-  sessionId: string,
-  origin: string
-): Promise<RedeemResult> {
+/**
+ * The session id comes from the browser (or Stripe's webhook), so it only
+ * picks the draft; the draft says which company — and so whose Stripe account
+ * — the money must be checked with.
+ */
+export async function redeemCheckoutSession(sessionId: string, origin: string): Promise<RedeemResult> {
   const admin = createAdminClient();
 
   const { data: draft } = await admin
     .from("checkout_drafts")
-    .select("id, session_id, payload, amount, website_slug, status, booking_id, booking_number")
+    .select("id, company_id, session_id, payload, amount, website_slug, status, booking_id, booking_number")
     .eq("session_id", sessionId)
     .maybeSingle();
 
   if (!draft) return { ok: false, error: "unknown_session" };
   const d = draft as DraftRow;
+  const stripe = await getStripe(d.company_id);
+  if (!stripe) return { ok: false, error: "payments_not_configured" };
 
   // Already done — this is the second caller, or the customer refreshing.
   if (d.booking_id && d.booking_number) {
@@ -97,7 +101,7 @@ export async function redeemCheckoutSession(
       await sleep(600);
       const { data: again } = await admin
         .from("checkout_drafts")
-        .select("id, session_id, payload, amount, website_slug, status, booking_id, booking_number")
+        .select("id, company_id, session_id, payload, amount, website_slug, status, booking_id, booking_number")
         .eq("id", d.id)
         .maybeSingle();
       if (again?.booking_id && again.booking_number) {
@@ -115,18 +119,19 @@ export async function redeemCheckoutSession(
     return { ok: false, error: invalid };
   }
 
-  const apiKey = await getWebsiteKey(d.website_slug ?? input.site ?? "main");
-  if (!apiKey) {
+  // Always the draft's own company, whatever site the saved trip names.
+  const site = await websiteForRequest(d.website_slug ?? input.site, d.company_id);
+  if (!site) {
     await failDraft(admin, d.id, "The website this booking came from is no longer active.");
     return { ok: false, error: "invalid_website" };
   }
 
-  const created = await createTrip({ ...input, payment_method: "card" }, apiKey);
+  const created = await createTrip({ ...input, payment_method: "card" }, site);
   if ("error" in created) {
     // Money is in but the booking would not save. Put it back to open so a
     // retry (or the webhook) can try again, and make sure a human sees it.
     await failDraft(admin, d.id, created.error.error ?? "create_booking failed");
-    await flagOrphanPayment(admin, intentId, amountPaid, receiptUrl);
+    await flagOrphanPayment(admin, d.company_id, intentId, amountPaid, receiptUrl);
     return { ok: false, error: created.error.error ?? "booking_failed" };
   }
 
@@ -156,6 +161,7 @@ export async function redeemCheckoutSession(
 
   if (intentId) {
     const { error: payErr } = await admin.from("payments").insert({
+      company_id: d.company_id,
       booking_id: outboundId,
       amount: amountPaid,
       method: "card",
@@ -169,7 +175,8 @@ export async function redeemCheckoutSession(
       await admin
         .from("payments")
         .update({ booking_id: outboundId, receipt_url: receiptUrl, needs_review: false, review_reason: null })
-        .eq("stripe_payment_intent_id", intentId);
+        .eq("stripe_payment_intent_id", intentId)
+        .eq("company_id", d.company_id);
     } else if (payErr) {
       console.error("[checkout] could not write payment row", payErr);
     }
@@ -187,6 +194,7 @@ export async function redeemCheckoutSession(
 
   // Emails, SMS and the activity log — never allowed to fail the booking.
   await notifyBooking({
+    companyId: d.company_id,
     input: { ...input, payment_method: "card" },
     trip: created,
     totalFare: amountPaid,
@@ -256,6 +264,7 @@ async function failDraft(admin: Admin, id: string, reason: string) {
  */
 async function flagOrphanPayment(
   admin: Admin,
+  companyId: string,
   intentId: string | null,
   amount: number,
   receiptUrl: string | null
@@ -264,6 +273,7 @@ async function flagOrphanPayment(
   const reason =
     "The customer paid on Stripe Checkout but the booking could not be saved. Refund them from the Stripe Dashboard or create the booking by hand.";
   const { error } = await admin.from("payments").insert({
+    company_id: companyId,
     booking_id: null,
     amount,
     method: "card",
@@ -275,6 +285,7 @@ async function flagOrphanPayment(
   });
   if (error && error.code !== "23505") console.error("[checkout] could not flag orphan payment", error);
   await admin.from("activity_logs").insert({
+    company_id: companyId,
     action: "payment_unmatched",
     description: `Checkout payment of ${amount.toFixed(2)} could not be turned into a booking (${intentId})`,
     metadata: { payment_intent: intentId, amount },

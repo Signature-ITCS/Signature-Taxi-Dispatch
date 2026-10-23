@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { BRAND } from "@/lib/brand";
+import { useBrand } from "@/components/BrandProvider";
 import {
   Download,
   Share,
@@ -42,32 +42,33 @@ type State = "checking" | "ready" | "installing" | "installed" | "manual";
  * prompt API, so we show Add-to-Home-Screen steps instead; other browsers get
  * matching manual steps.
  */
-const COPY = {
+const copyFor = (name: string, slug: string | null) => ({
   customer: {
-    app: BRAND.name,
+    app: name,
     title: "Get the app",
     blurb: "Book and track your taxi in one tap — it opens full-screen, like any other app.",
     perks: ["Book in seconds", "Live tracking", "Phone & desktop"],
-    open: { href: "/book", label: "Book a ride" },
+    open: { href: slug ? `/book/${slug}` : "/", label: "Book a ride" },
   },
   staff: {
-    app: BRAND.staffAppName,
+    app: `${name} Dispatch`,
     title: "Install the staff app",
     blurb: "The dispatch board and admin panel, one tap away. It opens at the staff sign-in.",
     perks: ["Opens instantly", "Live job alerts", "Phone & desktop"],
     open: { href: "/login", label: "Open and sign in" },
   },
   driver: {
-    app: BRAND.driverAppName,
+    app: `${name} Driver`,
     title: "Install the driver app",
     blurb: "Your jobs, one tap away — new-job alerts, status buttons and navigation. Install it, then sign in.",
     perks: ["New-job alerts", "One-tap status", "Navigation"],
     open: { href: "/driver", label: "Open and sign in" },
   },
-} as const;
+});
 
 export default function InstallApp({ variant }: { variant: "customer" | "staff" | "driver" }) {
-  const copy = COPY[variant];
+  const brand = useBrand();
+  const copy = copyFor(brand.name, brand.slug)[variant];
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [state, setState] = useState<State>("checking");
   const [platform, setPlatform] = useState<Platform>("desktop");

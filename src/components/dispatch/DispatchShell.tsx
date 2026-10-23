@@ -8,6 +8,7 @@ import SignOutButton from "@/components/dashboard/SignOutButton";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/format";
 import { LogoMark } from "@/components/Brand";
+import { useBrand } from "@/components/BrandProvider";
 import NotificationBell from "@/components/dashboard/NotificationBell";
 
 const NAV = [
@@ -28,6 +29,7 @@ export default function DispatchShell({
   isAdmin?: boolean;
   children: React.ReactNode;
 }) {
+  const brand = useBrand();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -44,7 +46,7 @@ export default function DispatchShell({
         <div className="flex items-center gap-2.5 px-5 py-5">
           <LogoMark size={36} />
           <div className="min-w-0">
-            <p className="font-display text-sm font-bold leading-tight text-ink-950">Cheap Transfers</p>
+            <p className="font-display text-sm font-bold leading-tight text-ink-950">{brand.name}</p>
             <p className="text-xs text-gray-400">Dispatch</p>
           </div>
           <div className="ml-auto">
