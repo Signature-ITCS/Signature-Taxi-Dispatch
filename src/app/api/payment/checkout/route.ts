@@ -143,7 +143,7 @@ export async function POST(req: Request) {
           },
         ],
         success_url: `${origin}/booking/complete?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/book/${encodeURIComponent(site)}?resume=${draftId}`,
+        cancel_url: `${origin}/${encodeURIComponent(site)}?resume=${draftId}`,
         // Stripe's minimum window is 30 minutes; the draft expires alongside it.
         expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
         metadata: { draft_id: draftId, site, category_id: input.category_id, quote_sig: sig },

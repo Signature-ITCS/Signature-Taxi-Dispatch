@@ -48,21 +48,21 @@ const copyFor = (name: string, slug: string | null) => ({
     title: "Get the app",
     blurb: "Book and track your taxi in one tap — it opens full-screen, like any other app.",
     perks: ["Book in seconds", "Live tracking", "Phone & desktop"],
-    open: { href: slug ? `/book/${slug}` : "/", label: "Book a ride" },
+    open: { href: slug ? `/${slug}` : "/", label: "Book a ride" },
   },
   staff: {
     app: `${name} Dispatch`,
     title: "Install the staff app",
     blurb: "The dispatch board and admin panel, one tap away. It opens at the staff sign-in.",
     perks: ["Opens instantly", "Live job alerts", "Phone & desktop"],
-    open: { href: "/login", label: "Open and sign in" },
+    open: { href: slug ? `/${slug}/login` : "/login", label: "Open and sign in" },
   },
   driver: {
     app: `${name} Driver`,
     title: "Install the driver app",
     blurb: "Your jobs, one tap away — new-job alerts, status buttons and navigation. Install it, then sign in.",
     perks: ["New-job alerts", "One-tap status", "Navigation"],
-    open: { href: "/driver", label: "Open and sign in" },
+    open: { href: slug ? `/${slug}/driver` : "/driver", label: "Open and sign in" },
   },
 });
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Loader2, Lock } from "lucide-react";
 
@@ -109,7 +110,7 @@ export default function SignupForm({
         You&apos;ll add a card on Stripe&apos;s secure page. Your login details arrive by email straight after.
       </p>
       <p className="text-center text-sm">
-        <a href="/login" className="text-gray-500 hover:text-ink-950">Already have an account? Sign in</a>
+        <Link href="/login" className="text-gray-500 hover:text-ink-950">Already have an account? Sign in</Link>
       </p>
     </form>
   );

@@ -44,8 +44,6 @@ const ERRORS: Record<string, string> = {
   email_in_use: "That email already has a login.",
   invalid_details: "Fill in the company name and a valid owner email.",
   unknown_plan: "Choose a plan.",
-  invalid_domain: "That isn't a valid domain (like booking.citycars.co.uk).",
-  domain_in_use: "Another company already uses that domain.",
   confirm_mismatch: "Type the company name exactly to confirm.",
   no_owner_login: "The owner has no login to send it to.",
 };
@@ -227,7 +225,6 @@ interface BackupRow {
 function CompanyPanel({ company: c, plans, onClose, onChanged }: { company: Company; plans: Plan[]; onClose: () => void; onChanged: () => void }) {
   const [status, setStatus] = useState(c.status);
   const [planId, setPlanId] = useState(c.plan_id ?? "");
-  const [domain, setDomain] = useState(c.custom_domain ?? "");
   const [notes, setNotes] = useState(c.notes ?? "");
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -264,8 +261,11 @@ function CompanyPanel({ company: c, plans, onClose, onChanged }: { company: Comp
     <Modal title={c.name} onClose={onClose}>
       <div className="space-y-5 text-sm">
         <div className="flex flex-wrap gap-3 text-gray-600">
-          <a href={`/book/${c.slug}`} target="_blank" className="flex items-center gap-1 text-brand-600">
-            Booking page <ExternalLink className="h-3.5 w-3.5" />
+          <a href={`/${c.slug}`} target="_blank" className="flex items-center gap-1 text-brand-600">
+            /{c.slug} <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+          <a href={`/${c.slug}/login`} target="_blank" className="flex items-center gap-1 text-brand-600">
+            Staff sign-in <ExternalLink className="h-3.5 w-3.5" />
           </a>
           <span>Owner: {c.owner_email}</span>
           <span>Since {new Date(c.created_at).toLocaleDateString("en-GB")}</span>
@@ -288,7 +288,6 @@ function CompanyPanel({ company: c, plans, onClose, onChanged }: { company: Comp
             </select>
           </label>
         </div>
-        <Input label="Own domain (optional) — add it in Vercel → Domains too" value={domain} onChange={setDomain} placeholder="booking.citycars.co.uk" />
         <label className="block">
           <span className="font-medium text-gray-700">Notes (only you see these)</span>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1 w-full rounded-xl border border-gray-200 p-2" />
@@ -299,7 +298,7 @@ function CompanyPanel({ company: c, plans, onClose, onChanged }: { company: Comp
         </p>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => call("save", "PATCH", `/api/master/companies/${c.id}`, { status, plan_id: planId, custom_domain: domain, notes }, "Saved.")}
+            onClick={() => call("save", "PATCH", `/api/master/companies/${c.id}`, { status, plan_id: planId, notes }, "Saved.")}
             disabled={!!busy}
             className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 font-semibold text-white disabled:opacity-60"
           >

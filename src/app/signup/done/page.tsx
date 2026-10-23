@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { MailCheck } from "lucide-react";
 
 export const metadata = { title: "Check your email" };
@@ -14,9 +15,9 @@ export default function SignupDonePage() {
           and sign in.
         </p>
         <p className="mt-4 text-xs text-gray-400">Nothing after a few minutes? Check your spam folder, or contact us.</p>
-        <a href="/login" className="mt-6 inline-block rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-ink-950">
+        <Link href="/login" className="mt-6 inline-block rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-ink-950">
           Go to sign in
-        </a>
+        </Link>
       </div>
     </main>
   );

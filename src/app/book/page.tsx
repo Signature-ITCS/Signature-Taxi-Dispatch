@@ -12,5 +12,5 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
   const site = company ? await companyWebsite(company.id) : null;
   if (!site) redirect("/");
   const resume = (await searchParams).resume;
-  redirect(`/book/${encodeURIComponent(site.slug)}${resume ? `?resume=${encodeURIComponent(resume)}` : ""}`);
+  redirect(`/${encodeURIComponent(site.slug)}${resume ? `?resume=${encodeURIComponent(resume)}` : ""}`);
 }

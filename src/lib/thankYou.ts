@@ -48,7 +48,7 @@ export async function sendRideThankYou(bookingId: string, origin?: string): Prom
     dropoff: claimed.dropoff_address,
     reviewUrl: `${base}/track/${encodeURIComponent(claimed.booking_number)}#review`,
     installUrl: `${base}/install/${brand.slug ?? ""}`,
-    bookUrl: `${base}/book/${brand.slug ?? ""}`,
+    bookUrl: `${base}/${brand.slug ?? ""}`,
   }, brand);
 
   const ok = await sendEmail({ companyId, to: claimed.customer_email, subject: mail.subject, html: mail.html });

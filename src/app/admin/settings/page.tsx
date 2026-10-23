@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   Loader2, Save, Check, Building2, BellRing, Plus, X, Mail, MessageSquare, CreditCard, Palette,
   KeyRound, Copy, CheckCircle2, Circle, LifeBuoy, Upload, Trash2, AlertTriangle,
 } from "lucide-react";
 import PageHeader from "@/components/admin/PageHeader";
+import { SecretInput, useSecretFields, type SecretStatus } from "@/components/SecretInput";
 
 interface Config {
   name: string;
@@ -25,21 +27,17 @@ interface Config {
   alert_emails_saved: boolean;
   card_enabled: boolean;
 }
-interface SecretStatus {
-  set: boolean;
-  last4: string | null;
-}
 interface Loaded {
   config: Config;
   secrets: Record<string, SecretStatus>;
   encryption_ready: boolean;
   stripe_webhook_url: string;
   booking_url: string;
+  staff_login_url: string;
+  driver_login_url: string;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-/** Marks a saved key for removal (an empty field means "leave it as it is"). */
-const REMOVE = "__remove__";
 const TIMEZONES = ["Europe/London", "Europe/Dublin", "Europe/Paris", "Asia/Dubai", "Asia/Karachi", "Asia/Kolkata", "America/New_York", "UTC"];
 
 const ERRORS: Record<string, string> = {
@@ -53,7 +51,8 @@ const ERRORS: Record<string, string> = {
 export default function SettingsPage() {
   const [data, setData] = useState<Loaded | null>(null);
   const [cfg, setCfg] = useState<Config | null>(null);
-  const [secrets, setSecrets] = useState<Record<string, string>>({});
+  // Key fields: never held in state — read once on Save, then wiped.
+  const secretFields = useSecretFields();
   const [saving, setSaving] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +62,6 @@ export default function SettingsPage() {
     if (res?.ok) {
       setData(res);
       setCfg(res.config);
-      setSecrets({});
     } else setError("Could not load settings.");
   };
   useEffect(() => {
@@ -79,12 +77,7 @@ export default function SettingsPage() {
     setError(null);
     const body: Record<string, unknown> = {};
     for (const f of fields) body[f] = cfg[f];
-    const s: Record<string, string> = {};
-    for (const n of secretNames) {
-      const v = secrets[n];
-      if (v === REMOVE) s[n] = "";
-      else if (v && v.trim()) s[n] = v.trim();
-    }
+    const s = secretFields.collect(secretNames);
     if (Object.keys(s).length) body.secrets = s;
     const res = await fetch("/api/admin/settings", {
       method: "POST",
@@ -96,6 +89,7 @@ export default function SettingsPage() {
       setError(ERRORS[res?.error as string] ?? "Couldn't save. Try again.");
       return;
     }
+    if (secretNames.length) secretFields.clear();
     setSaved(section);
     setTimeout(() => setSaved(null), 2500);
     await load();
@@ -139,12 +133,21 @@ export default function SettingsPage() {
             </p>
           ))}
         </div>
-        <p className="mt-3 text-sm text-gray-600">
-          Your booking page: <a href={data.booking_url} target="_blank" className="font-medium text-brand-600">{data.booking_url}</a>
-        </p>
-        <a href="/account" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-brand-600">
+        <div className="mt-3 space-y-1 text-sm text-gray-600">
+          <p className="font-medium text-gray-700">Your addresses</p>
+          {([
+            ["Booking page (share with customers)", data.booking_url],
+            ["Staff sign-in", data.staff_login_url],
+            ["Driver sign-in", data.driver_login_url],
+          ] as const).map(([label, url]) => (
+            <p key={label}>
+              {label}: <a href={url} target="_blank" className="font-medium text-brand-600">{url.replace(/^https?:\/\//, "")}</a>
+            </p>
+          ))}
+        </div>
+        <Link href="/account" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-brand-600">
           <LifeBuoy className="h-4 w-4" /> Rather we set it up for you? See the setup packages
-        </a>
+        </Link>
       </Card>
 
       {/* Company */}
@@ -191,7 +194,7 @@ export default function SettingsPage() {
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Send from (your domain)" value={cfg.email_from} onChange={(v) => set("email_from", v)} placeholder="bookings@citycars.co.uk" />
           <Field label="Customer replies go to" value={cfg.reply_to} onChange={(v) => set("reply_to", v)} placeholder="office@citycars.co.uk" />
-          <SecretField label="Resend API key" name="resend_api_key" status={sec.resend_api_key} values={secrets} setValues={setSecrets} placeholder="re_…" />
+          <SecretInput label="Resend API key" name="resend_api_key" status={sec.resend_api_key} fields={secretFields} placeholder="re_…" />
         </div>
         <div className="mt-4"><SaveBtn {...btn} section="email" fields={["email_from", "reply_to"]} secretNames={["resend_api_key"]} /></div>
       </Card>
@@ -200,8 +203,8 @@ export default function SettingsPage() {
       <Card icon={MessageSquare} title="SMS (Cosmic SMS)" note="Booking confirmations, “driver arrived” and “ride complete” texts.">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Sender name (max 11 letters/digits)" value={cfg.sms_sender} onChange={(v) => set("sms_sender", v.replace(/[^A-Za-z0-9]/g, "").slice(0, 11))} placeholder="CityCars" />
-          <SecretField label="Cosmic username" name="cosmic_username" status={sec.cosmic_username} values={secrets} setValues={setSecrets} />
-          <SecretField label="Cosmic API password" name="cosmic_password" status={sec.cosmic_password} values={secrets} setValues={setSecrets} />
+          <SecretInput label="Cosmic username" name="cosmic_username" status={sec.cosmic_username} fields={secretFields} />
+          <SecretInput label="Cosmic API password" name="cosmic_password" status={sec.cosmic_password} fields={secretFields} />
         </div>
         <div className="mt-4"><SaveBtn {...btn} section="sms" fields={["sms_sender"]} secretNames={["cosmic_username", "cosmic_password"]} /></div>
       </Card>
@@ -215,14 +218,14 @@ export default function SettingsPage() {
         <CopyBox value={data.stripe_webhook_url} />
         <p className="mb-3 mt-2 text-sm text-gray-600">3. Paste that webhook&apos;s <b>signing secret</b> below, save, then switch card payments on.</p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <SecretField label="Stripe secret key" name="stripe_secret_key" status={sec.stripe_secret_key} values={secrets} setValues={setSecrets} placeholder="sk_live_…" />
-          <SecretField label="Webhook signing secret" name="stripe_webhook_secret" status={sec.stripe_webhook_secret} values={secrets} setValues={setSecrets} placeholder="whsec_…" />
+          <SecretInput label="Stripe secret key" name="stripe_secret_key" status={sec.stripe_secret_key} fields={secretFields} placeholder="sk_live_…" />
+          <SecretInput label="Webhook signing secret" name="stripe_webhook_secret" status={sec.stripe_webhook_secret} fields={secretFields} placeholder="whsec_…" />
         </div>
         <label className="mt-4 flex items-center gap-2 text-sm">
           <input type="checkbox" checked={cfg.card_enabled} onChange={(e) => set("card_enabled", e.target.checked)} className="h-4 w-4" />
           <span>Offer card payment to customers</span>
         </label>
-        {cfg.card_enabled && !sec.stripe_secret_key?.set && !secrets.stripe_secret_key && (
+        {cfg.card_enabled && !sec.stripe_secret_key?.set && (
           <p className="mt-1 text-xs text-amber-700">Card stays hidden from customers until the Stripe secret key is saved.</p>
         )}
         <div className="mt-4"><SaveBtn {...btn} section="stripe" fields={["card_enabled"]} secretNames={["stripe_secret_key", "stripe_webhook_secret"]} /></div>
@@ -303,71 +306,6 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
         <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="h-9 w-12 cursor-pointer rounded-lg border border-gray-200" />
         <input value={value} onChange={(e) => onChange(e.target.value)} className="w-24 rounded-xl border border-gray-200 px-2 py-1.5 font-mono text-xs" />
       </span>
-    </label>
-  );
-}
-
-/** A key or password: once saved, never shown again — only replaced or removed. */
-function SecretField({
-  label, name, status, values, setValues, placeholder,
-}: {
-  label: string;
-  name: string;
-  status?: SecretStatus;
-  values: Record<string, string>;
-  setValues: (fn: (v: Record<string, string>) => Record<string, string>) => void;
-  placeholder?: string;
-}) {
-  const editing = name in values;
-  if (values[name] === REMOVE) {
-    return (
-      <div className="text-sm">
-        <span className="font-medium text-gray-700">{label}</span>
-        <div className="mt-1 flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
-          Will be removed when you save
-          <button
-            type="button"
-            onClick={() =>
-              setValues((v) => {
-                const n = { ...v };
-                delete n[name];
-                return n;
-              })
-            }
-            className="ml-auto font-semibold"
-          >
-            Undo
-          </button>
-        </div>
-      </div>
-    );
-  }
-  if (status?.set && !editing) {
-    return (
-      <div className="text-sm">
-        <span className="font-medium text-gray-700">{label}</span>
-        <div className="mt-1 flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
-          <KeyRound className="h-4 w-4 text-emerald-600" />
-          <span className="font-mono text-xs text-gray-600">Saved ••••{status.last4}</span>
-          <button type="button" onClick={() => setValues((v) => ({ ...v, [name]: "" }))} className="ml-auto text-xs font-semibold text-brand-600">Replace</button>
-          <button type="button" title="Remove" onClick={() => setValues((v) => ({ ...v, [name]: REMOVE }))} className="text-gray-400 hover:text-red-600">
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <label className="block text-sm">
-      <span className="font-medium text-gray-700">{label}</span>
-      <input
-        type="password"
-        autoComplete="off"
-        value={values[name] ?? ""}
-        onChange={(e) => setValues((v) => ({ ...v, [name]: e.target.value }))}
-        placeholder={status?.set ? "New value (leave empty to keep the saved one)" : placeholder}
-        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 font-mono text-xs outline-none focus:border-brand-500"
-      />
     </label>
   );
 }

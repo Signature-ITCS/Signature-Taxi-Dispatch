@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Loader2, MailCheck } from "lucide-react";
@@ -70,9 +71,9 @@ function Forgot() {
               {busy && <Loader2 className="h-4 w-4 animate-spin" />} Send the link
             </button>
             <p className="text-center text-sm">
-              <a href="/login" className="text-gray-500 hover:text-ink-950">
+              <Link href="/login" className="text-gray-500 hover:text-ink-950">
                 Back to sign in
-              </a>
+              </Link>
             </p>
           </form>
         )}

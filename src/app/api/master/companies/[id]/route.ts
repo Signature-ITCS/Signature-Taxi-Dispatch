@@ -5,11 +5,10 @@ import { sendPasswordLink, siteOrigin } from "@/lib/provision";
 import { clearBrandCache } from "@/lib/companyBrand";
 
 const STATUSES = ["trialing", "active", "past_due", "suspended", "cancelled"];
-const DOMAIN_RE = /^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
 
 /**
  * Change a company (platform owner): status (suspend / reactivate), plan,
- * custom domain, notes — or re-send the owner's "choose your password" email.
+ * notes — or re-send the owner's "choose your password" email.
  */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const owner = await getPlatformAdmin();
@@ -27,18 +26,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (!plan) return NextResponse.json({ ok: false, error: "unknown_plan" });
     patch.plan_id = b.plan_id;
   }
-  if (typeof b.custom_domain === "string") {
-    const d = b.custom_domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-    if (d && !DOMAIN_RE.test(d)) return NextResponse.json({ ok: false, error: "invalid_domain" });
-    patch.custom_domain = d || null;
-  }
   if (typeof b.notes === "string") patch.notes = b.notes.slice(0, 4000);
 
   if (Object.keys(patch).length) {
     patch.updated_at = new Date().toISOString();
     const { error } = await admin.from("companies").update(patch).eq("id", id);
     if (error) {
-      return NextResponse.json({ ok: false, error: error.code === "23505" ? "domain_in_use" : "save_failed" });
+      return NextResponse.json({ ok: false, error: "save_failed" });
     }
     clearBrandCache(id);
     await audit("company_updated", { actorId: owner.userId, actorEmail: owner.email, companyId: id, detail: patch });
@@ -59,6 +53,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       companyName: company.name,
       kind: "welcome",
       origin: siteOrigin(new URL(req.url).origin),
+      slug: company.slug,
     });
     await audit("welcome_resent", { actorId: owner.userId, actorEmail: owner.email, companyId: id });
     return NextResponse.json({ ok: sent, error: sent ? undefined : "email_failed" });

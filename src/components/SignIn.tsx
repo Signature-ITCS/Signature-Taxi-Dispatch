@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -151,9 +152,9 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
             {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (<><LogIn className="h-5 w-5" /> Sign In</>)}
           </button>
           <p className="text-center text-sm">
-            <a href="/auth/forgot" className="text-gray-500 hover:text-ink-950">
+            <Link href="/auth/forgot" className="text-gray-500 hover:text-ink-950">
               Forgot your password?
-            </a>
+            </Link>
           </p>
         </form>
       </motion.div>

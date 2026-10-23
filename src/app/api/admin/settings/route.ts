@@ -79,7 +79,9 @@ export async function GET(req: Request) {
     secrets,
     encryption_ready: encryptionConfigured(),
     stripe_webhook_url: `${origin}/api/webhooks/stripe/${companyId}`,
-    booking_url: `${origin}/book/${office.company.slug}`,
+    booking_url: `${origin}/${office.company.slug}`,
+    staff_login_url: `${origin}/${office.company.slug}/login`,
+    driver_login_url: `${origin}/${office.company.slug}/driver`,
     usage,
   });
 }

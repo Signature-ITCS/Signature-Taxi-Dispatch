@@ -88,7 +88,7 @@ export async function POST(req: Request) {
         email: cleanEmail,
         password,
         role: "driver",
-        loginUrl: `${origin}/driver/login`,
+        loginUrl: `${origin}/${office.company.slug}/driver`,
         installUrl: `${origin}/install/driver/${office.company.slug}`,
         invitedBy: me.full_name || null,
       }, await getCompanyBrand(companyId));

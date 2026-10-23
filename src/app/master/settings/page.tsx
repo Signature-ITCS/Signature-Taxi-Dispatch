@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Save, KeyRound, Copy, Check, AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { Loader2, Save, Copy, Check, AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { SecretInput, useSecretFields, type SecretStatus } from "@/components/SecretInput";
 
 interface Pkg {
   code: string;
@@ -12,7 +13,7 @@ interface Pkg {
 interface Data {
   platform: { name: string; support_email: string; from_email: string };
   services: { setup_packages: Pkg[]; restore_price: number };
-  secrets: Record<string, { set: boolean; last4: string | null }>;
+  secrets: Record<string, SecretStatus>;
   encryption_ready: boolean;
   env_fallbacks: Record<string, boolean>;
   stripe_webhook_url: string;
@@ -33,7 +34,8 @@ export default function PlatformSettingsPage() {
   const [platform, setPlatform] = useState({ name: "", support_email: "", from_email: "" });
   const [packages, setPackages] = useState<Pkg[]>([]);
   const [restorePrice, setRestorePrice] = useState("0");
-  const [keys, setKeys] = useState<Record<string, string>>({});
+  // Key fields: never held in state — read once on Save, then wiped.
+  const fields = useSecretFields();
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -45,7 +47,6 @@ export default function PlatformSettingsPage() {
     setPlatform(res.platform);
     setPackages(res.services.setup_packages);
     setRestorePrice(String(res.services.restore_price));
-    setKeys({});
   }, []);
   useEffect(() => {
     load();
@@ -60,28 +61,20 @@ export default function PlatformSettingsPage() {
     setBusy(null);
     setMsg(res?.ok ? { ok: true, text: "Saved." } : { ok: false, text: ERRORS[res?.error] ?? "Couldn't save." });
     if (res?.ok) load();
+    return !!res?.ok;
   };
 
   if (!d) return <Loader2 className="h-6 w-6 animate-spin text-brand-500" />;
-  const secretRow = (name: string, label: string, placeholder: string) => {
-    const s = d.secrets[name];
-    return (
-      <label className="block text-sm" key={name}>
-        <span className="font-medium text-gray-700">{label}</span>
-        {s?.set && !(name in keys) ? (
-          <div className="mt-1 flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
-            <KeyRound className="h-4 w-4 text-emerald-600" />
-            <span className="font-mono text-xs text-gray-600">Saved ••••{s.last4}</span>
-            <button type="button" onClick={() => setKeys({ ...keys, [name]: "" })} className="ml-auto text-xs font-semibold text-brand-600">Replace</button>
-          </div>
-        ) : (
-          <input type="password" autoComplete="off" value={keys[name] ?? ""} onChange={(e) => setKeys({ ...keys, [name]: e.target.value })}
-            placeholder={d.env_fallbacks[name] && !s?.set ? `${placeholder} (using the Vercel value until set)` : placeholder}
-            className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 font-mono text-xs" />
-        )}
-      </label>
-    );
-  };
+  const secretRow = (name: string, label: string, placeholder: string) => (
+    <SecretInput
+      key={name}
+      label={label}
+      name={name}
+      status={d.secrets[name]}
+      fields={fields}
+      placeholder={d.env_fallbacks[name] && !d.secrets[name]?.set ? `${placeholder} (using the Vercel value until set)` : placeholder}
+    />
+  );
 
   return (
     <div className="max-w-3xl space-y-5 pb-16">
@@ -130,10 +123,8 @@ export default function PlatformSettingsPage() {
         <p className="text-sm text-gray-600">Welcome / set-password emails, and every company&apos;s emails until it adds its own key.</p>
         {secretRow("resend_api_key", "Resend API key", "re_…")}
         <button
-          onClick={() => {
-            const s: Record<string, string> = {};
-            for (const [k, v] of Object.entries(keys)) if (v.trim()) s[k] = v.trim();
-            save("keys", { secrets: s });
+          onClick={async () => {
+            if (await save("keys", { secrets: fields.collect(["stripe_secret_key", "stripe_webhook_secret", "resend_api_key"]) })) fields.clear();
           }}
           disabled={!!busy}
           className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"

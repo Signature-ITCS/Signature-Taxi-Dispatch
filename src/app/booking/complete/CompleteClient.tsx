@@ -137,7 +137,7 @@ function Complete() {
           <MapPin className="h-5 w-5" /> Track your ride
         </a>
         <a
-          href={brand.slug ? `/book/${brand.slug}` : "/"}
+          href={brand.slug ? `/${brand.slug}` : "/"}
           className="mt-2.5 flex w-full items-center justify-center rounded-xl border border-gray-200 py-3 font-semibold text-ink-950 transition-colors hover:bg-gray-50"
         >
           Book another ride
@@ -201,7 +201,7 @@ function Problem({ error }: { error?: string }) {
         <h1 className="font-display text-xl font-bold text-ink-950">{copy.title}</h1>
         <p className="mt-2 text-sm leading-relaxed text-gray-600">{copy.body}</p>
         <a
-          href={brand.slug ? `/book/${brand.slug}` : "/"}
+          href={brand.slug ? `/${brand.slug}` : "/"}
           className="mt-6 flex w-full items-center justify-center rounded-xl bg-brand-500 py-3 font-semibold text-white transition-colors hover:bg-brand-600"
         >
           Back to booking

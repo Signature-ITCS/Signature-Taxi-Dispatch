@@ -73,7 +73,7 @@ export async function POST(req: Request) {
         email,
         password,
         role,
-        loginUrl: `${origin}/login`,
+        loginUrl: `${origin}/${office.company.slug}/login`,
         installUrl: `${origin}/install/staff/${office.company.slug}`,
         invitedBy: me.full_name || null,
       }, await getCompanyBrand(companyId));

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -56,7 +57,7 @@ export default async function Home() {
   const byDomain = await getCompanyByDomain((await headers()).get("host") ?? "");
   if (byDomain) {
     const site = await companyWebsite(byDomain.id);
-    if (site) redirect(`/book/${site.slug}`);
+    if (site) redirect(`/${site.slug}`);
   }
 
   const [name, plans] = await Promise.all([getPlatformName(), listPlans({ publicOnly: true })]);
@@ -81,7 +82,7 @@ export default async function Home() {
             <a href="#faq" className="hover:text-ink-950">FAQ</a>
           </nav>
           <div className="flex items-center gap-2">
-            <a href="/login" className="rounded-xl px-3 py-2 text-sm font-semibold text-ink-950 hover:bg-gray-50">Sign in</a>
+            <Link href="/login" className="rounded-xl px-3 py-2 text-sm font-semibold text-ink-950 hover:bg-gray-50">Sign in</Link>
             <a href="#plans" className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
               {trialDays ? "Start free trial" : "Get started"}
             </a>
@@ -237,7 +238,7 @@ export default async function Home() {
 
       <footer className="border-t border-gray-100 px-5 py-8 text-center text-sm text-gray-500">
         © {new Date().getFullYear()} {name} ·{" "}
-        <a href="/login" className="hover:text-ink-950">Sign in</a> ·{" "}
+        <Link href="/login" className="hover:text-ink-950">Sign in</Link> ·{" "}
         <a href="#plans" className="hover:text-ink-950">Pricing</a>
       </footer>
     </main>

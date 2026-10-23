@@ -56,6 +56,8 @@ export async function sendPasswordLink(opts: {
   planName?: string | null;
   kind: "welcome" | "reset";
   origin: string;
+  /** The company's address (its staff sign-in is /<slug>/login). */
+  slug?: string | null;
 }): Promise<boolean> {
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.generateLink({ type: "recovery", email: opts.email });
@@ -71,7 +73,7 @@ export async function sendPasswordLink(opts: {
       companyName: opts.companyName,
       planName: opts.planName ?? null,
       setPasswordUrl: url,
-      loginUrl: `${opts.origin}/login`,
+      loginUrl: opts.slug ? `${opts.origin}/${opts.slug}/login` : `${opts.origin}/login`,
       kind: opts.kind,
     },
     await getPlatformBrand()
@@ -204,6 +206,7 @@ export async function provisionCompany(p: ProvisionInput): Promise<ProvisionResu
     planName: plan.name as string,
     kind: "welcome",
     origin: p.origin,
+    slug,
   });
 
   await audit("company_created", {
@@ -219,7 +222,7 @@ export async function provisionCompany(p: ProvisionInput): Promise<ProvisionResu
       ["Owner", `${p.ownerName} <${email}>`],
       ["Plan", String(plan.name)],
       ["Status", p.status],
-      ["Booking page", `${p.origin}/book/${slug}`],
+      ["Company address", `${p.origin}/${slug}`],
     ],
     `${p.origin}/master/companies`
   );

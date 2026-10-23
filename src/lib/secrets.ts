@@ -5,8 +5,8 @@ import { decryptSecret, encryptSecret } from "@/lib/crypto";
  * API keys and passwords — the platform's own and each company's.
  *
  * Saved encrypted (see crypto.ts), read only by the server at the moment of
- * use, and never sent back to any browser: settings screens only ever learn
- * whether a key is set and its last 4 characters. Server-only.
+ * use, and never sent back to any browser — not even partly: settings screens
+ * only ever learn whether a key is set and when. Server-only.
  */
 
 /** Keys a company can save in Settings. */
@@ -72,7 +72,8 @@ export async function setSecret(
       company_id: companyId,
       name,
       ciphertext: encryptSecret(trimmed),
-      last4: trimmed.slice(-4),
+      // No part of the key is kept in plain text, not even its last characters.
+      last4: null,
       updated_by: userId,
     });
     if (error) throw error;
@@ -82,19 +83,18 @@ export async function setSecret(
 
 export interface SecretStatus {
   set: boolean;
-  last4: string | null;
   updated_at: string | null;
 }
 
 /** Which secrets are set — safe to show in a browser (never the values). */
 export async function secretStatus(companyId: string | null): Promise<Record<string, SecretStatus>> {
   const admin = createAdminClient();
-  let q = admin.from("secrets").select("name, last4, updated_at");
+  let q = admin.from("secrets").select("name, updated_at");
   q = companyId ? q.eq("company_id", companyId) : q.is("company_id", null);
   const { data } = await q;
   const out: Record<string, SecretStatus> = {};
-  for (const r of (data ?? []) as { name: string; last4: string | null; updated_at: string }[]) {
-    out[r.name] = { set: true, last4: r.last4, updated_at: r.updated_at };
+  for (const r of (data ?? []) as { name: string; updated_at: string }[]) {
+    out[r.name] = { set: true, updated_at: r.updated_at };
   }
   return out;
 }

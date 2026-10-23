@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, Loader2, CheckCircle2 } from "lucide-react";
@@ -54,9 +55,9 @@ export default function SetPasswordPage() {
           <div className="text-center">
             <h1 className="font-display text-xl font-bold text-ink-950">This link has expired</h1>
             <p className="mt-2 text-sm text-gray-500">Ask for a new one — it only takes a moment.</p>
-            <a href="/auth/forgot" className="mt-5 inline-block rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white">
+            <Link href="/auth/forgot" className="mt-5 inline-block rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white">
               Send me a new link
-            </a>
+            </Link>
           </div>
         ) : done ? (
           <div className="py-6 text-center">

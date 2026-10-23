@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Download, History, ShieldCheck, DatabaseBackup, Lock } from "lucide-react";
 import PageHeader from "@/components/admin/PageHeader";
@@ -82,9 +83,9 @@ export default function BackupsPage() {
             Your data is still backed up every night. If you ever need it put back to an earlier day, we can do it for you —
             request it on the Plan &amp; billing page, or upgrade your plan to download and restore backups yourself.
           </p>
-          <a href="/account" className="mt-4 inline-block rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white">
+          <Link href="/account" className="mt-4 inline-block rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white">
             Plan &amp; billing
-          </a>
+          </Link>
         </div>
       ) : (
         <>
