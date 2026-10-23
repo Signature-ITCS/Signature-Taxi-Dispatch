@@ -458,3 +458,64 @@ export function upcomingReminderEmail(jobs: ReminderJob[], dispatchUrl: string, 
     html,
   };
 }
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/* Platform emails (sent by the platform, about a company's account)         */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+export interface AccountReadyData {
+  fullName: string;
+  companyName: string;
+  planName: string | null;
+  /** One-time link to choose a password (expires). */
+  setPasswordUrl: string;
+  loginUrl: string;
+  /** "welcome" for a new account, "reset" for a forgotten password. */
+  kind: "welcome" | "reset";
+}
+
+/** "Your account is ready — set your password" / "Reset your password". */
+export function accountReadyEmail(d: AccountReadyData, brand: EmailBrand): { subject: string; html: string } {
+  B = brand;
+  const first = escapeHtml(d.fullName.split(" ")[0] || "there");
+  const welcome = d.kind === "welcome";
+  const html = shell({
+    preheader: welcome ? `${d.companyName} is ready — choose your password to sign in.` : "Choose a new password.",
+    heading: welcome ? "Your dispatch system is ready" : "Reset your password",
+    sub: welcome
+      ? `Hi ${first} — the account for <b>${escapeHtml(d.companyName)}</b> has been created${d.planName ? ` on the <b>${escapeHtml(d.planName)}</b> plan` : ""}.`
+      : `Hi ${first} — someone (hopefully you) asked to reset the password for your ${escapeHtml(d.companyName)} login.`,
+    footer: B.name,
+    body: `
+      <p style="margin:0 0 14px 0;color:#374151;font-size:14px;line-height:1.6;">
+        ${welcome ? "Choose your password to sign in. Then the setup checklist walks you through your logo, prices and keys." : "Choose a new password with the button below."}
+      </p>
+      ${button(d.setPasswordUrl, welcome ? "Choose your password" : "Choose a new password")}
+      <p style="margin:16px 0 0 0;color:#6b7280;font-size:13px;line-height:1.6;">
+        The button works once and expires after 24 hours. Afterwards, sign in at
+        <a href="${escapeAttr(d.loginUrl)}" style="color:#2563eb;text-decoration:none;">${escapeHtml(d.loginUrl.replace(/^https?:\/\//, ""))}</a>.
+        ${welcome ? "" : "If you didn't ask for this, ignore this email — your password stays the same."}
+      </p>`,
+  });
+  return { subject: welcome ? `${d.companyName}: your account is ready` : "Reset your password", html };
+}
+
+/** A short notice to the platform owner (new signup, setup or restore request…). */
+export function ownerNoticeEmail(
+  d: { title: string; lines: [string, string][]; actionUrl?: string; actionLabel?: string },
+  brand: EmailBrand
+): { subject: string; html: string } {
+  B = brand;
+  const html = shell({
+    preheader: d.title,
+    heading: d.title,
+    sub: "From your platform",
+    footer: `${B.name} platform`,
+    body: `
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+        ${d.lines.map(([k, v]) => row(escapeHtml(k), escapeHtml(v))).join("")}
+      </table>
+      ${d.actionUrl ? `<div style="margin-top:20px;">${button(d.actionUrl, d.actionLabel ?? "Open")}</div>` : ""}`,
+  });
+  return { subject: d.title, html };
+}

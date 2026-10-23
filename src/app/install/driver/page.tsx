@@ -2,6 +2,9 @@ import InstallApp from "@/components/InstallApp";
 import BrandScope from "@/components/BrandScope";
 import { driverMetadata } from "@/lib/staffMetadata";
 
+// Reads plans / names from the database: render on each request, never at build time.
+export const dynamic = "force-dynamic";
+
 // Links the driver manifest, so the browser offers the driver app (opens /driver).
 export const metadata = driverMetadata;
 

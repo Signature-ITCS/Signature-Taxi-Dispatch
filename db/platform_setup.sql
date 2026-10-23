@@ -2071,14 +2071,14 @@ create trigger trg_notify_booking_completed
   for each row execute function public.notify_booking_completed();
 
 -- Company name, and an SMS sender ID networks will accept (max 11
--- letters/digits — "Cheap Transfers" is too long). Only filled in where
+-- letters/digits — a long company name is too long). Only filled in where
 -- still blank (or the "Taxi Co" placeholder): anything already set in
 -- Admin → Settings is left alone.
 update public.app_settings
-   set value = jsonb_set(value, '{name}', '"Cheap Transfers"'), updated_at = now()
+   set value = jsonb_set(value, '{name}', '"Taxi Co"'), updated_at = now()
  where key = 'company' and coalesce(value->>'name', '') in ('', 'Taxi Co');
 update public.app_settings
-   set value = jsonb_set(value, '{sms_sender}', '"CheapTrans"'), updated_at = now()
+   set value = jsonb_set(value, '{sms_sender}', '"TaxiCo"'), updated_at = now()
  where key = 'notifications' and coalesce(value->>'sms_sender', '') = '';
 
 commit;
@@ -3863,7 +3863,15 @@ insert into public.platform_settings (key, value) values
   ('platform', jsonb_build_object('name', 'Dispatch Platform', 'support_email', '', 'from_email', '')),
   ('webhooks', jsonb_build_object(
       'booking_status_url', 'https://booking.airport-transfer.uk/api/webhooks/booking-status',
-      'reminders_url',      'https://booking.airport-transfer.uk/api/cron/reminders'))
+      'reminders_url',      'https://booking.airport-transfer.uk/api/cron/reminders')),
+  -- Paid help, priced in the master dashboard (pounds; 0 = free / by quote).
+  ('services', jsonb_build_object(
+      'setup_packages', jsonb_build_array(
+        jsonb_build_object('code', 'quick', 'name', 'Quick setup', 'price', 99,
+          'description', 'We connect your card payments, email and SMS, and add your logo and colours.'),
+        jsonb_build_object('code', 'full', 'name', 'Full setup', 'price', 249,
+          'description', 'Quick setup, plus your prices and fixed routes, the booking widget on your website and a training call.')),
+      'restore_price', 49))
 on conflict (key) do nothing;
 
 -- ── 3. company_id on every company-owned table ───────────────────────────────

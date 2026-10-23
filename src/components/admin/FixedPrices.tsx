@@ -191,7 +191,7 @@ export default function FixedPrices({ cats }: { cats: VehicleCategory[] }) {
 
   const saveAddExtras = async (v: boolean) => {
     setAddExtras(v);
-    await supabase.from("app_settings").upsert({ key: "fixed_prices", value: { add_extras: v } });
+    await supabase.from("app_settings").upsert({ key: "fixed_prices", value: { add_extras: v } }, { onConflict: "company_id,key" });
     await logActivity(supabase, "pricing_updated", `Fixed prices: extra charges ${v ? "added on top" : "not added"}`);
   };
 

@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED = ["/admin", "/dispatch"];
+const PROTECTED = ["/admin", "/dispatch", "/account", "/master"];
 // The driver app has its own sign-in page, inside its own area.
 const DRIVER_AREA = "/driver";
 const DRIVER_LOGIN = "/driver/login";

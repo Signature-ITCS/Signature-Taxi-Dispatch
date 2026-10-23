@@ -1,299 +1,467 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Save, Check, Building2, BellRing, Plus, X, Mail, AlertTriangle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Loader2, Save, Check, Building2, BellRing, Plus, X, Mail, MessageSquare, CreditCard, Palette,
+  KeyRound, Copy, CheckCircle2, Circle, LifeBuoy, Upload, Trash2, AlertTriangle,
+} from "lucide-react";
 import PageHeader from "@/components/admin/PageHeader";
-import { cn } from "@/lib/format";
 
 interface Config {
-  email_from: string;
-  /** Where a customer's Reply goes (comma-separated). */
-  reply_to: string;
-  sms_sender: string;
+  name: string;
+  legal_name: string;
+  address: string;
+  phone: string;
+  email: string;
+  website: string;
   timezone: string;
-  /** Exactly who receives the "New booking" alert email. */
+  primary_color: string;
+  dark_color: string;
+  logo_url: string;
+  email_from: string;
+  sms_sender: string;
+  reply_to: string;
   booking_alert_emails: string[];
-  /** false until the admin has saved the list at least once (legacy: all staff). */
   alert_emails_saved: boolean;
+  card_enabled: boolean;
+}
+interface SecretStatus {
+  set: boolean;
+  last4: string | null;
+}
+interface Loaded {
+  config: Config;
+  secrets: Record<string, SecretStatus>;
+  encryption_ready: boolean;
+  stripe_webhook_url: string;
+  booking_url: string;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Marks a saved key for removal (an empty field means "leave it as it is"). */
+const REMOVE = "__remove__";
+const TIMEZONES = ["Europe/London", "Europe/Dublin", "Europe/Paris", "Asia/Dubai", "Asia/Karachi", "Asia/Kolkata", "America/New_York", "UTC"];
 
-const TIMEZONES: { v: string; label: string }[] = [
-  { v: "Europe/London", label: "UK — London (Europe/London)" },
-  { v: "Europe/Dublin", label: "Ireland — Dublin (Europe/Dublin)" },
-  { v: "Asia/Karachi", label: "Pakistan — Karachi (Asia/Karachi)" },
-  { v: "Asia/Kolkata", label: "India — Kolkata (Asia/Kolkata)" },
-  { v: "Asia/Dubai", label: "UAE — Dubai (Asia/Dubai)" },
-  { v: "Europe/Paris", label: "Europe — Paris (Europe/Paris)" },
-  { v: "America/New_York", label: "US East — New York" },
-  { v: "America/Los_Angeles", label: "US West — Los Angeles" },
-  { v: "Australia/Sydney", label: "Australia — Sydney" },
-  { v: "UTC", label: "UTC" },
-];
+const ERRORS: Record<string, string> = {
+  invalid_email_from: "The sender address isn't a valid email address.",
+  invalid_stripe_secret_key: "That doesn't look like a Stripe secret key (it starts sk_live_ or sk_test_).",
+  invalid_stripe_webhook_secret: "That doesn't look like a Stripe webhook signing secret (it starts whsec_).",
+  invalid_resend_api_key: "That doesn't look like a Resend API key (it starts re_).",
+  encryption_not_configured: "Keys can't be saved yet: the platform's encryption key isn't set. Please contact support.",
+};
 
 export default function SettingsPage() {
-  const [config, setConfig] = useState<Config | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [data, setData] = useState<Loaded | null>(null);
+  const [cfg, setCfg] = useState<Config | null>(null);
+  const [secrets, setSecrets] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const load = async () => {
+    const res = await fetch("/api/admin/settings").then((r) => r.json()).catch(() => null);
+    if (res?.ok) {
+      setData(res);
+      setCfg(res.config);
+      setSecrets({});
+    } else setError("Could not load settings.");
+  };
   useEffect(() => {
-    (async () => {
-      const res = await fetch("/api/admin/settings");
-      const data = await res.json();
-      if (data?.ok) {
-        setConfig(data.config);
-      } else {
-        setError("Could not load settings.");
-      }
-      setLoading(false);
-    })();
+    load();
   }, []);
 
-  const setCfg = (k: keyof Config, v: string) => setConfig((c) => (c ? { ...c, [k]: v } : c));
+  const set = <K extends keyof Config>(k: K, v: Config[K]) => setCfg((c) => (c ? { ...c, [k]: v } : c));
 
-  // Booking alert recipient list
-  const [newEmail, setNewEmail] = useState("");
-  const [emailErr, setEmailErr] = useState<string | null>(null);
-  const [listSaving, setListSaving] = useState(false);
-  const [listSaved, setListSaved] = useState(false);
-
-  // Adding or removing an address saves the list at once — it used to wait for
-  // "Save settings", and an address added without it was lost on refresh.
-  const saveList = async (list: string[], undo: string[]) => {
-    setListSaving(true);
-    setListSaved(false);
-    try {
-      const res = await fetch("/api/admin/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ booking_alert_emails: list }),
-      });
-      const data = await res.json();
-      if (!data?.ok) throw new Error(data?.error);
-      setConfig((c) => (c ? { ...c, alert_emails_saved: true } : c));
-      setListSaved(true);
-      setTimeout(() => setListSaved(false), 1800);
-    } catch {
-      setConfig((c) => (c ? { ...c, booking_alert_emails: undo } : c));
-      setEmailErr("Could not save the list. Please try again.");
-    }
-    setListSaving(false);
-  };
-
-  const addEmail = () => {
-    const e = newEmail.trim().toLowerCase();
-    if (!EMAIL_RE.test(e)) {
-      setEmailErr("Enter a valid email address.");
-      return;
-    }
-    if (config?.booking_alert_emails.includes(e)) {
-      setEmailErr("That address is already on the list.");
-      return;
-    }
-    if (!config) return;
-    const before = config.booking_alert_emails;
-    const list = [...before, e];
-    setConfig({ ...config, booking_alert_emails: list });
-    setNewEmail("");
-    setEmailErr(null);
-    saveList(list, before);
-  };
-  const removeEmail = (e: string) => {
-    if (!config) return;
-    const before = config.booking_alert_emails;
-    const list = before.filter((x) => x !== e);
-    setConfig({ ...config, booking_alert_emails: list });
-    saveList(list, before);
-  };
-
-  const save = async () => {
-    if (!config) return;
-    setSaving(true);
+  /** Save one section: the fields named, plus any keys typed into it. */
+  const save = async (section: string, fields: (keyof Config)[], secretNames: string[] = []) => {
+    if (!cfg) return;
+    setSaving(section);
     setError(null);
-    try {
-      const res = await fetch("/api/admin/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
-      });
-      const data = await res.json();
-      setSaving(false);
-      if (!data?.ok) {
-        setError("Could not save. Please try again.");
-        return;
-      }
-      setSaved(true);
-      setConfig((c) => (c ? { ...c, alert_emails_saved: true } : c));
-      setTimeout(() => setSaved(false), 1800);
-    } catch {
-      setSaving(false);
-      setError("Could not save. Please try again.");
+    const body: Record<string, unknown> = {};
+    for (const f of fields) body[f] = cfg[f];
+    const s: Record<string, string> = {};
+    for (const n of secretNames) {
+      const v = secrets[n];
+      if (v === REMOVE) s[n] = "";
+      else if (v && v.trim()) s[n] = v.trim();
     }
+    if (Object.keys(s).length) body.secrets = s;
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((r) => r.json()).catch(() => null);
+    setSaving(null);
+    if (!res?.ok) {
+      setError(ERRORS[res?.error as string] ?? "Couldn't save. Try again.");
+      return;
+    }
+    setSaved(section);
+    setTimeout(() => setSaved(null), 2500);
+    await load();
   };
+
+  if (!cfg || !data) {
+    return (
+      <div>
+        <PageHeader title="Settings" />
+        {error ? <p className="text-sm text-red-600">{error}</p> : <Loader2 className="h-6 w-6 animate-spin text-brand-500" />}
+      </div>
+    );
+  }
+
+  const sec = data.secrets;
+  const checklist: [string, boolean][] = [
+    ["Company details", !!cfg.phone || !!cfg.email],
+    ["Logo and colours", !!cfg.logo_url || cfg.primary_color.toLowerCase() !== "#1d4ed8"],
+    ["SMS (Cosmic)", !!sec.cosmic_username?.set && !!sec.cosmic_password?.set],
+    ["Card payments (Stripe)", cfg.card_enabled && !!sec.stripe_secret_key?.set],
+    ["Booking alert emails", cfg.alert_emails_saved],
+  ];
+
+  const btn = { save, saving, saved };
 
   return (
-    <div>
-      <PageHeader title="Settings" subtitle="Notifications & timezone" />
+    <div className="space-y-5 pb-16">
+      <PageHeader title="Settings" subtitle="Your company's details, look, keys and notifications." />
+      {error && (
+        <p className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+          <AlertTriangle className="h-4 w-4" /> {error}
+        </p>
+      )}
 
-      <div className="max-w-3xl space-y-6 px-5 pb-10 md:px-8">
-        {loading || !config ? (
-          <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-7 w-7 animate-spin text-brand-600" />
+      {/* Checklist */}
+      <Card icon={CheckCircle2} title="Setup checklist">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {checklist.map(([label, ok]) => (
+            <p key={label} className="flex items-center gap-2 text-sm text-gray-700">
+              {ok ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Circle className="h-4 w-4 text-gray-300" />} {label}
+            </p>
+          ))}
+        </div>
+        <p className="mt-3 text-sm text-gray-600">
+          Your booking page: <a href={data.booking_url} target="_blank" className="font-medium text-brand-600">{data.booking_url}</a>
+        </p>
+        <a href="/account" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-brand-600">
+          <LifeBuoy className="h-4 w-4" /> Rather we set it up for you? See the setup packages
+        </a>
+      </Card>
+
+      {/* Company */}
+      <Card icon={Building2} title="Company details" note="Shown on your booking page, emails and receipts.">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Company name" value={cfg.name} onChange={(v) => set("name", v)} />
+          <Field label="Legal name (receipts)" value={cfg.legal_name} onChange={(v) => set("legal_name", v)} placeholder="City Cars Ltd" />
+          <Field label="Phone" value={cfg.phone} onChange={(v) => set("phone", v)} />
+          <Field label="Email" value={cfg.email} onChange={(v) => set("email", v)} />
+          <Field label="Website" value={cfg.website} onChange={(v) => set("website", v)} placeholder="https://citycars.co.uk" />
+          <label className="block text-sm">
+            <span className="font-medium text-gray-700">Time zone</span>
+            <select value={cfg.timezone} onChange={(e) => set("timezone", e.target.value)} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2">
+              {TIMEZONES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <div className="sm:col-span-2">
+            <Field label="Address (receipts)" value={cfg.address} onChange={(v) => set("address", v)} />
           </div>
-        ) : (
-          <>
-            {/* Notifications & timezone */}
-            <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 flex items-center gap-2 font-display font-bold text-ink-950">
-                <Building2 className="h-5 w-5 text-brand-600" /> Notifications &amp; timezone
-              </h2>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Timezone</span>
-                  <select
-                    value={config.timezone}
-                    onChange={(e) => setCfg("timezone", e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10"
-                  >
-                    {config.timezone && !TIMEZONES.some((t) => t.v === config.timezone) && (
-                      <option value={config.timezone}>{config.timezone}</option>
-                    )}
-                    {TIMEZONES.map((t) => (
-                      <option key={t.v} value={t.v}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <Field label="SMS sender ID" value={config.sms_sender} onChange={(v) => setCfg("sms_sender", v)} placeholder="TaxiService" />
-                <Field label="Email sender (From)" value={config.email_from} onChange={(v) => setCfg("email_from", v)} placeholder="Taxi <bookings@domain>" full />
-                <Field label="Customer replies go to" value={config.reply_to} onChange={(v) => setCfg("reply_to", v)} placeholder="office@gmail.com" full />
-                <p className="-mt-2 text-[11px] leading-snug text-gray-400 sm:col-span-2">
-                  When a customer presses Reply on any of our emails, it goes here. Leave blank to reply to the sender
-                  address. Several addresses: separate with commas (the customer will see them all).
-                </p>
-              </div>
-            </section>
+        </div>
+        <div className="mt-4"><SaveBtn {...btn} section="company" fields={["name", "legal_name", "phone", "email", "website", "timezone", "address"]} /></div>
+      </Card>
 
-            {/* Booking alert recipients */}
-            <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h2 className="mb-1 flex items-center gap-2 font-display font-bold text-ink-950">
-                <BellRing className="h-5 w-5 text-brand-600" /> Booking alert emails
-              </h2>
-              <p className="mb-4 text-xs text-gray-400">
-                Every new booking sends a &ldquo;New booking received&rdquo; email to <b>exactly</b> these addresses. Add or
-                remove anyone here — dispatcher logins don&apos;t need to match. Changes save straight away.
-              </p>
+      {/* Branding */}
+      <Card icon={Palette} title="Logo and colours" note="Used on your booking page, apps, emails and receipts.">
+        <LogoUpload logoUrl={cfg.logo_url} onChanged={load} onRemove={() => { set("logo_url", ""); }} />
+        <div className="mt-4 flex flex-wrap gap-6">
+          <ColorField label="Main colour" value={cfg.primary_color} onChange={(v) => set("primary_color", v)} />
+          <ColorField label="Dark colour" value={cfg.dark_color} onChange={(v) => set("dark_color", v)} />
+          <div className="flex items-end gap-2">
+            <span className="rounded-xl px-4 py-2 text-sm font-semibold text-white" style={{ background: cfg.primary_color }}>Book now</span>
+            <span className="rounded-xl px-4 py-2 text-sm font-semibold text-white" style={{ background: cfg.dark_color }}>Header</span>
+          </div>
+        </div>
+        <div className="mt-4"><SaveBtn {...btn} section="brand" fields={["primary_color", "dark_color", "logo_url"]} /></div>
+      </Card>
 
-              {!config.alert_emails_saved && (
-                <p className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  Not saved yet — right now alerts go to everyone with a staff login (listed below). Add or remove
-                  an address (or press Save settings) to lock this list; after that only the addresses here get alerts.
-                </p>
-              )}
+      {/* Email */}
+      <Card icon={Mail} title="Email" note="Booking confirmations, thank-you emails and alerts.">
+        <p className="mb-3 rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
+          Without your own Resend key, emails are sent by us, showing your company name. To send from your own address
+          (e.g. bookings@yourdomain), verify your domain at resend.com, then add the key and address here.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Send from (your domain)" value={cfg.email_from} onChange={(v) => set("email_from", v)} placeholder="bookings@citycars.co.uk" />
+          <Field label="Customer replies go to" value={cfg.reply_to} onChange={(v) => set("reply_to", v)} placeholder="office@citycars.co.uk" />
+          <SecretField label="Resend API key" name="resend_api_key" status={sec.resend_api_key} values={secrets} setValues={setSecrets} placeholder="re_…" />
+        </div>
+        <div className="mt-4"><SaveBtn {...btn} section="email" fields={["email_from", "reply_to"]} secretNames={["resend_api_key"]} /></div>
+      </Card>
 
-              <ul className="mb-3 divide-y divide-gray-50 overflow-hidden rounded-xl border border-gray-100">
-                {config.booking_alert_emails.length === 0 && (
-                  <li className="flex items-center gap-2 px-3.5 py-3 text-sm text-red-600">
-                    <AlertTriangle className="h-4 w-4 shrink-0" /> No addresses — nobody will be emailed about new bookings.
-                  </li>
-                )}
-                {config.booking_alert_emails.map((e) => (
-                  <li key={e} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                    <span className="flex min-w-0 items-center gap-2 text-sm text-ink-950">
-                      <Mail className="h-4 w-4 shrink-0 text-gray-400" />
-                      <span className="truncate">{e}</span>
-                    </span>
-                    <button
-                      onClick={() => removeEmail(e)}
-                      aria-label={`Remove ${e}`}
-                      title="Remove"
-                      className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
+      {/* SMS */}
+      <Card icon={MessageSquare} title="SMS (Cosmic SMS)" note="Booking confirmations, “driver arrived” and “ride complete” texts.">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Sender name (max 11 letters/digits)" value={cfg.sms_sender} onChange={(v) => set("sms_sender", v.replace(/[^A-Za-z0-9]/g, "").slice(0, 11))} placeholder="CityCars" />
+          <SecretField label="Cosmic username" name="cosmic_username" status={sec.cosmic_username} values={secrets} setValues={setSecrets} />
+          <SecretField label="Cosmic API password" name="cosmic_password" status={sec.cosmic_password} values={secrets} setValues={setSecrets} />
+        </div>
+        <div className="mt-4"><SaveBtn {...btn} section="sms" fields={["sms_sender"]} secretNames={["cosmic_username", "cosmic_password"]} /></div>
+      </Card>
 
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={newEmail}
-                  onChange={(e) => {
-                    setNewEmail(e.target.value);
-                    setEmailErr(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addEmail();
-                    }
-                  }}
-                  placeholder="name@example.com"
-                  className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10"
-                />
-                <button
-                  onClick={addEmail}
-                  disabled={!newEmail.trim() || listSaving}
-                  className="flex shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:border-brand-300 hover:text-brand-700 disabled:opacity-40"
-                >
-                  {listSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add
-                </button>
-              </div>
-              {emailErr && <p className="mt-2 text-xs text-red-600">{emailErr}</p>}
-              {listSaved && (
-                <p className="mt-2 flex items-center gap-1 text-xs text-green-600">
-                  <Check className="h-3.5 w-3.5" /> Saved — alerts go to these addresses.
-                </p>
-              )}
-            </section>
-
-            {error && <p className="text-sm text-red-600">{error}</p>}
-
-            <button
-              onClick={save}
-              disabled={saving}
-              className={cn(
-                "flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white transition-colors",
-                saved ? "bg-green-600" : "bg-brand-600 hover:bg-brand-700"
-              )}
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? (<><Check className="h-4 w-4" /> Saved</>) : (<><Save className="h-4 w-4" /> Save settings</>)}
-            </button>
-          </>
+      {/* Card payments */}
+      <Card icon={CreditCard} title="Card payments (Stripe)" note="Customers pay on Stripe's own page; the money goes straight to your Stripe account.">
+        <ol className="mb-3 list-decimal space-y-1 pl-5 text-sm text-gray-600">
+          <li>In your Stripe Dashboard → Developers → API keys, copy the <b>secret key</b> and paste it below.</li>
+          <li>In Developers → Webhooks, add an endpoint with this address, for the events checkout.session.completed, checkout.session.expired, payment_intent.succeeded, payment_intent.payment_failed, charge.refunded, charge.dispute.created and charge.dispute.closed:</li>
+        </ol>
+        <CopyBox value={data.stripe_webhook_url} />
+        <p className="mb-3 mt-2 text-sm text-gray-600">3. Paste that webhook&apos;s <b>signing secret</b> below, save, then switch card payments on.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <SecretField label="Stripe secret key" name="stripe_secret_key" status={sec.stripe_secret_key} values={secrets} setValues={setSecrets} placeholder="sk_live_…" />
+          <SecretField label="Webhook signing secret" name="stripe_webhook_secret" status={sec.stripe_webhook_secret} values={secrets} setValues={setSecrets} placeholder="whsec_…" />
+        </div>
+        <label className="mt-4 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={cfg.card_enabled} onChange={(e) => set("card_enabled", e.target.checked)} className="h-4 w-4" />
+          <span>Offer card payment to customers</span>
+        </label>
+        {cfg.card_enabled && !sec.stripe_secret_key?.set && !secrets.stripe_secret_key && (
+          <p className="mt-1 text-xs text-amber-700">Card stays hidden from customers until the Stripe secret key is saved.</p>
         )}
-      </div>
+        <div className="mt-4"><SaveBtn {...btn} section="stripe" fields={["card_enabled"]} secretNames={["stripe_secret_key", "stripe_webhook_secret"]} /></div>
+      </Card>
+
+      {/* Alerts */}
+      <Card icon={BellRing} title="Booking alert emails" note="Who gets an email for every new booking, payment problem and pickup reminder.">
+        <AlertList value={cfg.booking_alert_emails} onChange={(v) => set("booking_alert_emails", v)} />
+        <div className="mt-4"><SaveBtn {...btn} section="alerts" fields={["booking_alert_emails"]} /></div>
+      </Card>
+
+      {!data.encryption_ready && (
+        <p className="flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
+          <KeyRound className="h-4 w-4" /> Keys can&apos;t be saved yet — the platform&apos;s encryption key isn&apos;t configured.
+        </p>
+      )}
     </div>
   );
 }
 
-function Field({
-  label,
-  value,
-  onChange,
-  placeholder,
-  full,
+/* ── pieces ─────────────────────────────────────────────────────────────── */
+
+function SaveBtn({
+  save,
+  saving,
+  saved,
+  section,
+  fields,
+  secretNames,
 }: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  full?: boolean;
+  save: (section: string, fields: (keyof Config)[], secretNames?: string[]) => void;
+  saving: string | null;
+  saved: string | null;
+  section: string;
+  fields: (keyof Config)[];
+  secretNames?: string[];
 }) {
   return (
-    <label className={cn("block", full && "sm:col-span-2")}>
-      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</span>
+    <button
+      onClick={() => save(section, fields, secretNames)}
+      disabled={!!saving}
+      className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+    >
+      {saving === section ? <Loader2 className="h-4 w-4 animate-spin" /> : saved === section ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+      {saved === section ? "Saved" : "Save"}
+    </button>
+  );
+}
+
+function Card({ icon: Icon, title, note, children }: { icon: typeof Mail; title: string; note?: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+      <h2 className="flex items-center gap-2 font-display text-base font-bold text-ink-950">
+        <Icon className="h-5 w-5 text-brand-600" /> {title}
+      </h2>
+      {note && <p className="mb-4 mt-0.5 text-sm text-gray-500">{note}</p>}
+      {!note && <div className="mb-3" />}
+      {children}
+    </section>
+  );
+}
+
+function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <label className="block text-sm">
+      <span className="font-medium text-gray-700">{label}</span>
+      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-brand-500" />
+    </label>
+  );
+}
+
+function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="block text-sm">
+      <span className="font-medium text-gray-700">{label}</span>
+      <span className="mt-1 flex items-center gap-2">
+        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="h-9 w-12 cursor-pointer rounded-lg border border-gray-200" />
+        <input value={value} onChange={(e) => onChange(e.target.value)} className="w-24 rounded-xl border border-gray-200 px-2 py-1.5 font-mono text-xs" />
+      </span>
+    </label>
+  );
+}
+
+/** A key or password: once saved, never shown again — only replaced or removed. */
+function SecretField({
+  label, name, status, values, setValues, placeholder,
+}: {
+  label: string;
+  name: string;
+  status?: SecretStatus;
+  values: Record<string, string>;
+  setValues: (fn: (v: Record<string, string>) => Record<string, string>) => void;
+  placeholder?: string;
+}) {
+  const editing = name in values;
+  if (values[name] === REMOVE) {
+    return (
+      <div className="text-sm">
+        <span className="font-medium text-gray-700">{label}</span>
+        <div className="mt-1 flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
+          Will be removed when you save
+          <button
+            type="button"
+            onClick={() =>
+              setValues((v) => {
+                const n = { ...v };
+                delete n[name];
+                return n;
+              })
+            }
+            className="ml-auto font-semibold"
+          >
+            Undo
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (status?.set && !editing) {
+    return (
+      <div className="text-sm">
+        <span className="font-medium text-gray-700">{label}</span>
+        <div className="mt-1 flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+          <KeyRound className="h-4 w-4 text-emerald-600" />
+          <span className="font-mono text-xs text-gray-600">Saved ••••{status.last4}</span>
+          <button type="button" onClick={() => setValues((v) => ({ ...v, [name]: "" }))} className="ml-auto text-xs font-semibold text-brand-600">Replace</button>
+          <button type="button" title="Remove" onClick={() => setValues((v) => ({ ...v, [name]: REMOVE }))} className="text-gray-400 hover:text-red-600">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <label className="block text-sm">
+      <span className="font-medium text-gray-700">{label}</span>
       <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10"
+        type="password"
+        autoComplete="off"
+        value={values[name] ?? ""}
+        onChange={(e) => setValues((v) => ({ ...v, [name]: e.target.value }))}
+        placeholder={status?.set ? "New value (leave empty to keep the saved one)" : placeholder}
+        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 font-mono text-xs outline-none focus:border-brand-500"
       />
     </label>
+  );
+}
+
+function CopyBox({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+      <code className="flex-1 truncate text-xs text-gray-700">{value}</code>
+      <button
+        type="button"
+        onClick={() => {
+          navigator.clipboard.writeText(value).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          });
+        }}
+        className="flex items-center gap-1 text-xs font-semibold text-brand-600"
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copied" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
+function LogoUpload({ logoUrl, onChanged, onRemove }: { logoUrl: string; onChanged: () => void; onRemove: () => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const upload = async (file: File) => {
+    setErr(null);
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return setErr("Use a PNG, JPG or WebP image.");
+    if (file.size > 1024 * 1024) return setErr("The logo must be under 1 MB.");
+    setBusy(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/admin/logo", { method: "POST", body: fd }).then((r) => r.json()).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) return setErr("Upload failed. Try another image.");
+    onChanged();
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-4">
+      <div className="flex h-16 w-40 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {logoUrl ? <img src={logoUrl} alt="Logo" className="max-h-14 max-w-36 object-contain" /> : <span className="text-xs text-gray-400">No logo — your name is shown</span>}
+      </div>
+      <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+        onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+      <button type="button" onClick={() => input.current?.click()} disabled={busy}
+        className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-ink-950 disabled:opacity-60">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload logo
+      </button>
+      {logoUrl && (
+        <button type="button" onClick={onRemove} className="text-sm text-gray-500 hover:text-red-600">
+          Remove (then Save)
+        </button>
+      )}
+      {err && <p className="w-full text-sm text-red-600">{err}</p>}
+    </div>
+  );
+}
+
+function AlertList({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const [email, setEmail] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const add = () => {
+    const e = email.trim().toLowerCase();
+    if (!EMAIL_RE.test(e)) return setErr("Enter a valid email address.");
+    if (!value.includes(e)) onChange([...value, e]);
+    setEmail("");
+    setErr(null);
+  };
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2">
+        {value.length === 0 && <p className="text-sm text-gray-500">Nobody — no booking alert emails are sent.</p>}
+        {value.map((e) => (
+          <span key={e} className="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">
+            {e}
+            <button type="button" onClick={() => onChange(value.filter((x) => x !== e))} aria-label={`Remove ${e}`}>
+              <X className="h-3.5 w-3.5 text-gray-400 hover:text-red-600" />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <input value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
+          placeholder="office@citycars.co.uk" className="w-full max-w-xs rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+        <button type="button" onClick={add} className="flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold">
+          <Plus className="h-4 w-4" /> Add
+        </button>
+      </div>
+      {err && <p className="mt-1 text-sm text-red-600">{err}</p>}
+    </div>
   );
 }

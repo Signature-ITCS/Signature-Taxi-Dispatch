@@ -2,7 +2,7 @@
 
 /* ============================================================
    TAXI — Design System (Tailwind v4)
-   Brand: Cheap Transfers — logo orange on navy
+   Default colours (each company overrides them — see src/lib/brandColors.ts)
    ============================================================ */
 
 @theme {

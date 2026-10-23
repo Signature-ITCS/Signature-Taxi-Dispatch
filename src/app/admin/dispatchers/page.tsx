@@ -142,7 +142,11 @@ function AddDispatcher({ onClose, onDone }: { onClose: () => void; onDone: () =>
       const data = await res.json();
       setSaving(false);
       if (!data?.ok) {
-        setError(data?.error === "no_service_role_key" ? "Server not configured for staff creation." : "Could not add dispatcher. The email may already be in use.");
+        setError(
+          data?.error === "plan_limit_staff"
+            ? "Your plan's office-user limit is reached. Upgrade on the Plan & billing page to add more."
+            : "Could not add dispatcher. The email may already be in use."
+        );
         return;
       }
       onDone();

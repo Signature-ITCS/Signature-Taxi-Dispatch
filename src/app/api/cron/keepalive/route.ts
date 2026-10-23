@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sweepRideThankYous } from "@/lib/thankYou";
+import { runNightlyBackups } from "@/lib/backups";
+
+// Exports every company's backup — give it the longest run a plan allows.
+export const maxDuration = 60;
 
 /**
  * Daily keep-alive, called by the Vercel cron in vercel.json.
@@ -19,7 +23,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  const { error } = await createAdminClient().from("app_settings").select("key").limit(1);
+  const { error } = await createAdminClient().from("plans").select("id").limit(1);
   if (error) {
     console.error("[keepalive] supabase ping failed", error);
     return NextResponse.json({ ok: false, error: "db_error" }, { status: 500 });
@@ -28,5 +32,11 @@ export async function GET(req: Request) {
   // Once a day is also a good moment to retry thank-you emails that failed.
   const thanked = await sweepRideThankYous(new URL(req.url).origin).catch(() => 0);
 
-  return NextResponse.json({ ok: true, at: new Date().toISOString(), thanked });
+  // And each company's nightly backup (kept 30 days).
+  const backups = await runNightlyBackups().catch((err) => {
+    console.error("[keepalive] backups failed", err);
+    return { done: 0, failed: -1 };
+  });
+
+  return NextResponse.json({ ok: true, at: new Date().toISOString(), thanked, backups });
 }

@@ -3,7 +3,7 @@
 # Runs every night (and on demand from Actions → "Back up database" → Run
 # workflow). Each backup is kept:
 #   • on GitHub, attached to that run, for 90 days (always);
-#   • in Google Drive, folder "Cheap Transfers Backups", last 60 days (only once
+#   • in Google Drive, folder "Dispatch Platform Backups", last 60 days (only once
 #     the RCLONE_CONFIG secret is set — see db/BACKUPS.md).
 #
 # Needs one repository secret:
@@ -59,10 +59,10 @@ jobs:
         run: |
           set -euo pipefail
           STAMP=$(date -u +%Y-%m-%d)
-          FILE="cheap-transfers-db-$STAMP.sql"
+          FILE="platform-db-$STAMP.sql"
           echo "FILE=$FILE" >> "$GITHUB_ENV"
           {
-            echo "-- Cheap Transfers — database backup $STAMP (UTC)"
+            echo "-- the dispatch platform — database backup $STAMP (UTC)"
             echo "-- Restore: paste this whole file into Supabase → SQL Editor and Run,"
             echo "-- or use the 'Restore database' GitHub workflow. See db/BACKUPS.md."
             echo
@@ -122,7 +122,7 @@ jobs:
           curl -fsSL https://rclone.org/install.sh | sudo bash > /dev/null
           mkdir -p ~/.config/rclone
           echo "$RCLONE_CONFIG_B64" | base64 -d > ~/.config/rclone/rclone.conf
-          rclone copy "$FILE.gz" "gdrive:Cheap Transfers Backups" --no-traverse
+          rclone copy "$FILE.gz" "gdrive:Dispatch Platform Backups" --no-traverse
           # Keep the last 60 days in Drive.
-          rclone delete "gdrive:Cheap Transfers Backups" --min-age 60d --include "cheap-transfers-db-*.sql.gz"
-          echo "Copied to Google Drive: Cheap Transfers Backups/$FILE.gz"
+          rclone delete "gdrive:Dispatch Platform Backups" --min-age 60d --include "platform-db-*.sql.gz"
+          echo "Copied to Google Drive: Dispatch Platform Backups/$FILE.gz"

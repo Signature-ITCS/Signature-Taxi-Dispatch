@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
-import { BRAND } from "@/lib/brand";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -17,20 +16,19 @@ const jakarta = Plus_Jakarta_Sans({
   display: "swap",
 });
 
+// Pages set their own title and app manifest (each company's own name); these
+// are only the defaults.
 export const metadata: Metadata = {
-  title: `${BRAND.name} — Book a Taxi`,
-  description: `Book a ${BRAND.name} online — taxis and airport transfers, 24 hours a day.`,
-  applicationName: BRAND.name,
-  manifest: "/manifest.webmanifest",
+  title: "Taxi booking and dispatch",
+  description: "Online booking, dispatch and driver apps for taxi and transfer companies.",
   icons: {
     icon: [{ url: "/favicon-32.png", sizes: "32x32", type: "image/png" }],
     apple: "/apple-touch-icon.png",
   },
-  appleWebApp: { title: BRAND.name, capable: true, statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
-  themeColor: BRAND.colors.navy,
+  themeColor: "#0f172a",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

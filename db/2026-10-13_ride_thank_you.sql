@@ -62,14 +62,14 @@ create trigger trg_notify_booking_completed
   for each row execute function public.notify_booking_completed();
 
 -- Company name, and an SMS sender ID networks will accept (max 11
--- letters/digits — "Cheap Transfers" is too long). Only filled in where
+-- letters/digits — a long company name is too long). Only filled in where
 -- still blank (or the "Taxi Co" placeholder): anything already set in
 -- Admin → Settings is left alone.
 update public.app_settings
-   set value = jsonb_set(value, '{name}', '"Cheap Transfers"'), updated_at = now()
+   set value = jsonb_set(value, '{name}', '"Taxi Co"'), updated_at = now()
  where key = 'company' and coalesce(value->>'name', '') in ('', 'Taxi Co');
 update public.app_settings
-   set value = jsonb_set(value, '{sms_sender}', '"CheapTrans"'), updated_at = now()
+   set value = jsonb_set(value, '{sms_sender}', '"TaxiCo"'), updated_at = now()
  where key = 'notifications' and coalesce(value->>'sms_sender', '') = '';
 
 commit;

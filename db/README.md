@@ -1,29 +1,43 @@
 # Database
 
-## Standing up a NEW instance
+## Standing up the platform (new, empty Supabase project)
 
-On a brand-new, empty Supabase project, run these in the SQL editor **in order**:
+Run **`platform_setup.sql`** once (SQL Editor → New query → paste → Run). It is
+every file below joined in the right order, ending with
+`2026-10-24_platform.sql`, which turns the single-company schema into the
+multi-company platform. It refuses to run on a database that already has
+bookings or staff.
 
-1. `00_schema.sql` — types, tables, keys, indexes, helper and trigger functions
-2. `01_functions.sql` — pricing, booking, tracking, cash, reporting; triggers; row-level security
-3. `2026-09-15_external_bookings.sql` — adds `create_external_booking()`
-4. `02_seed.sql` — car classes, distance bands, surcharges, default settings
+Then create your own login (Authentication → Users → Add user, auto-confirm)
+and make it the platform owner:
 
-That's it. `00` and `01` are a full snapshot of the database as it stood on
-2026-09-23, so the other dated files below are already folded into them — you do
-not need to run them on a fresh project (they are idempotent, so running them
-does no harm either).
+```sql
+select platform_add_owner('you@example.com');
+```
 
-Then two things `02_seed.sql` deliberately leaves out, because they belong to
-whoever runs this particular instance:
+Companies are created from the master dashboard or by signing up — each gets
+its starting data from `seed_company()`; never insert company rows by hand.
 
-- **The first admin.** Sign the user up through Supabase Auth, then
-  `insert into profiles (id, full_name, email, role) values ('<auth user id>', 'Admin', 'you@example.com', 'admin');`
-- **A website row.** `insert into websites (name, slug) values ('Main Website', 'main');`
-  then read back its generated `api_key` and put it in `WIDGET_API_KEY`.
+`platform_setup.sql` is generated — edit the dated files and rebuild it
+(the order is listed at its top).
 
-Car classes, pricing and settings all arrive with the seed, so the widget can
-quote a fare as soon as those two rows exist.
+### What 2026-10-24_platform.sql does
+
+- Platform tables: `plans`, `companies`, `platform_admins`, `platform_settings`,
+  `secrets` (encrypted by the app), `setup_requests`, `restore_requests`,
+  `company_backups`, `platform_audit`.
+- `company_id` (required) on all 22 company tables; uniqueness per company
+  (customers by phone, settings by key, Stripe ids).
+- `tenant_guard` trigger: fills `company_id` and blocks cross-company references.
+- Row-level security rebuilt: own company only, nothing while suspended.
+- Pricing/booking functions scoped to the website's company; staff functions
+  run as the signed-in user.
+- Plan limits enforced by trigger (`enforce_plan_limits`).
+- `restore_company(company, backup)`: puts one company back, in one transaction.
+
+It was tested on PGlite (real Postgres) with two rival companies: isolation for
+staff, drivers and the public; plan limits; suspension; backup and restore of
+one company leaving the other untouched; running the file twice.
 
 ## Why 00_schema.sql exists
 
@@ -66,5 +80,5 @@ above, in order.
 
 ## Other files
 
-- `reset_demo_data.sql` — clears test bookings, customers and payments before go-live.
-- `BACKUPS.md` — nightly backups and one-click restore (GitHub Actions).
+- `platform_setup.sql` — the whole database in one file (generated).
+- Whole-database backups (all companies): `ops/backup-repo/README.md` — keep them in a separate private repository.

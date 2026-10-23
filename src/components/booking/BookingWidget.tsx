@@ -487,7 +487,13 @@ export default function BookingWidget({
       const data = await res.json();
       setSubmitting(false);
       if (!data?.ok || !data.outbound?.ok) {
-        setError(data?.error === "category_unavailable" ? UNAVAILABLE : "Booking failed. Please try again.");
+        setError(
+          data?.error === "category_unavailable"
+            ? UNAVAILABLE
+            : data?.error === "plan_limit_bookings" || data?.error === "company_unavailable"
+              ? "Online booking is temporarily unavailable. Please call us to book."
+              : "Booking failed. Please try again."
+        );
         return;
       }
       forgetCheckout();

@@ -571,7 +571,11 @@ function DriverModal({
         .single();
       if (dErr || !newDriver) {
         setSaving(false);
-        setError("Could not add driver. Try again.");
+        setError(
+          /plan_limit_drivers/.test(dErr?.message ?? "")
+            ? "Your plan's driver limit is reached. Upgrade on the Plan & billing page to add more drivers."
+            : "Could not add driver. Try again."
+        );
         return;
       }
       if (hasVehicle) {

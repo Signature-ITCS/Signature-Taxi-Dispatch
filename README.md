@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Dispatch platform
 
-## Getting Started
+Taxi and transfer booking, dispatch and driver apps — for many companies at
+once. Each company signs up (or is created by the platform owner), gets its own
+booking site, dispatch board, driver app, settings, branding and keys, and only
+ever sees its own data.
 
-First, run the development server:
+## Who uses what
+
+| Who | Where | What |
+|---|---|---|
+| Platform owner | `/master` | Companies, plans, subscriptions, requests, platform keys, backups, audit log |
+| New company | `/` → `/signup` | Choose a plan, pay on the platform's Stripe, get a "choose your password" email |
+| Company admin | `/admin` | Bookings, dispatch, drivers, pricing, **Settings** (logo, colours, Stripe, Resend, SMS), **Backups**, Plan & billing (`/account`) |
+| Dispatcher | `/dispatch` | Dispatch board, bookings, calendar, map |
+| Driver | `/driver` | Driver app with push notifications |
+| Customer | `/book/<company>` | Booking widget, card or cash; `/track/<ref>` live tracking |
+
+## How companies are kept apart
+
+- One Supabase database. Every company-owned table has `company_id`.
+- **Row-level security** on every table: a signed-in user only ever reads or
+  changes rows of their own company, and nothing while it is suspended.
+- A trigger stamps `company_id` on every new row and refuses any row that
+  points at another company's row (driver, customer, car class…).
+- Server code that needs the service role uses `tenantDb(companyId)`
+  (`src/lib/tenantDb.ts`), which filters every query to one company. The
+  company always comes from the signed-in user or the booking website — never
+  from the browser.
+- Plan limits (drivers, office users, bookings a month) are enforced in the
+  database.
+- Company API keys are encrypted (AES-256-GCM, `SECRETS_ENCRYPTION_KEY`) and
+  write-only: screens only ever show "saved ••••1234".
+
+`db/2026-10-24_platform.sql` holds all of this; the tests that prove it are
+described in `db/README.md`.
+
+## Setting up
+
+1. Supabase: run `db/platform_setup.sql` on a new, empty project. Create your
+   own login (Authentication → Users), then run
+   `select platform_add_owner('you@example.com');`
+2. Vercel: set the variables in `.env.example`, deploy.
+3. Sign in at `/login` → you land on `/master`. In **Platform settings** add your
+   Stripe and Resend keys and the Stripe webhook; in **Plans** press
+   "Sync to Stripe" on each plan.
+4. Whole-database backups: see `ops/backup-repo/README.md` (a separate,
+   private repository).
+
+## Develop
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js 16 — see `AGENTS.md`. Middleware is `src/proxy.ts`.

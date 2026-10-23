@@ -168,7 +168,15 @@ insert into public.platform_settings (key, value) values
   ('platform', jsonb_build_object('name', 'Dispatch Platform', 'support_email', '', 'from_email', '')),
   ('webhooks', jsonb_build_object(
       'booking_status_url', 'https://booking.airport-transfer.uk/api/webhooks/booking-status',
-      'reminders_url',      'https://booking.airport-transfer.uk/api/cron/reminders'))
+      'reminders_url',      'https://booking.airport-transfer.uk/api/cron/reminders')),
+  -- Paid help, priced in the master dashboard (pounds; 0 = free / by quote).
+  ('services', jsonb_build_object(
+      'setup_packages', jsonb_build_array(
+        jsonb_build_object('code', 'quick', 'name', 'Quick setup', 'price', 99,
+          'description', 'We connect your card payments, email and SMS, and add your logo and colours.'),
+        jsonb_build_object('code', 'full', 'name', 'Full setup', 'price', 249,
+          'description', 'Quick setup, plus your prices and fixed routes, the booking widget on your website and a training call.')),
+      'restore_price', 49))
 on conflict (key) do nothing;
 
 -- ── 3. company_id on every company-owned table ───────────────────────────────

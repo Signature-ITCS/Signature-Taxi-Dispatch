@@ -42,7 +42,7 @@ export default function PricingPage() {
     setSavingCsp(true);
     await supabase
       .from("app_settings")
-      .upsert({ key: "child_seat_price", value: { amount: childSeatPrice } });
+      .upsert({ key: "child_seat_price", value: { amount: childSeatPrice } }, { onConflict: "company_id,key" });
     await logActivity(supabase, "pricing_updated", `Updated child seat price to ${money(childSeatPrice)}`);
     setSavingCsp(false);
     setSavedCsp(true);
@@ -395,7 +395,7 @@ function DistancePricing({ cats }: { cats: VehicleCategory[] }) {
     setSavingMode(true);
     const { error } = await supabase
       .from("app_settings")
-      .upsert({ key: "distance_bands", value: { add_up: next } });
+      .upsert({ key: "distance_bands", value: { add_up: next } }, { onConflict: "company_id,key" });
     if (!error) {
       setAddUp(next);
       await logActivity(

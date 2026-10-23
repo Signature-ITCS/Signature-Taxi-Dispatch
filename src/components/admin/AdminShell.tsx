@@ -19,6 +19,7 @@ import {
   Headset,
   ScrollText,
   Settings,
+  DatabaseBackup,
   Menu,
   X,
 } from "lucide-react";
@@ -43,6 +44,7 @@ const NAV = [
   { href: "/admin/websites", label: "Widgets", icon: Code2 },
   { href: "/admin/logs", label: "Activity Logs", icon: ScrollText },
   { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/admin/backups", label: "Backups", icon: DatabaseBackup },
   { href: "/account", label: "Plan & billing", icon: CreditCard },
 ];
 

@@ -1,4 +1,14 @@
-# Database backups
+# Whole-database backups (all companies)
+
+> **Put these files in a SEPARATE, PRIVATE GitHub repository — not in the app
+> repository.** The app repo has to stay public for Vercel Hobby, and these
+> backups contain every company's customers, payments and logins. Copy the
+> `.github` folder and this README into a new private repo (e.g.
+> `Signature-ITCS/platform-backups`) and set the secret there.
+>
+> This is the platform-level safety net. Each company also gets its own nightly
+> backup inside the app (Admin → Backups / master dashboard → Companies), which
+> is what a single company's restore uses.
 
 > **The GitHub repository must be PRIVATE before backups are switched on.**
 > Backups contain customers' names and phone numbers and staff/driver logins.
@@ -18,7 +28,7 @@ Where it is kept:
 | Place | How long | Set-up |
 |---|---|---|
 | GitHub (Actions → "Back up database" → a run → **Artifacts**) | 90 days | the one secret below |
-| Google Drive, folder **Cheap Transfers Backups** | 60 days | optional, see step 3 |
+| Google Drive, folder **Dispatch Platform Backups** | 60 days | optional, see step 3 |
 
 ## 1. Turn it on (once)
 
@@ -26,8 +36,8 @@ Where it is kept:
    Copy the connection string and replace `[YOUR-PASSWORD]` with the database
    password (Project Settings → Database → reset it there if you don't have it).
    It looks like
-   `postgresql://postgres.smkadupcnzktwojnmubp:PASSWORD@aws-0-eu-west-2.pooler.supabase.com:5432/postgres`
-2. **GitHub** → the `Signature-ITCS/taxi-dispatch` repo → **Settings → Secrets and variables →
+   `postgresql://postgres.<project-ref>:PASSWORD@aws-0-eu-west-2.pooler.supabase.com:5432/postgres`
+2. **GitHub** → your PRIVATE backups repo → **Settings → Secrets and variables →
    Actions → New repository secret**
    - Name: `SUPABASE_DB_URL`
    - Value: the connection string from step 1
@@ -74,8 +84,8 @@ A backup you have restored once is one you can trust.
 With the PostgreSQL client installed (`psql`), from the folder with the file:
 
 ```
-gunzip cheap-transfers-db-2026-10-14.sql.gz
-psql "SESSION_POOLER_CONNECTION_STRING" -v ON_ERROR_STOP=1 --single-transaction -f cheap-transfers-db-2026-10-14.sql
+gunzip platform-db-2026-10-14.sql.gz
+psql "SESSION_POOLER_CONNECTION_STRING" -v ON_ERROR_STOP=1 --single-transaction -f platform-db-2026-10-14.sql
 ```
 
 (Logins that already exist are skipped automatically.)
@@ -96,7 +106,7 @@ GitHub keeps 90 days. To have a copy in your own Google Drive as well:
 4. GitHub → Settings → Secrets → Actions → New secret **`RCLONE_CONFIG`** →
    paste that text.
 
-From the next night on, each backup is also copied to **Cheap Transfers Backups**
+From the next night on, each backup is also copied to **Dispatch Platform Backups**
 in that Drive, and copies older than 60 days are removed.
 
 The `.sql` files contain customer names, phone numbers and logins (password

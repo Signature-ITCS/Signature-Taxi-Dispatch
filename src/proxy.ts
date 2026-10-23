@@ -18,6 +18,6 @@ export const config = {
     // cron authenticate with a signature or secret, not a session cookie, and the
     // session refresh here would only add latency and Set-Cookie noise to a
     // machine-to-machine call.
-    "/((?!_next/static|_next/image|api/webhooks|api/cron|favicon.ico|staff.webmanifest|driver.webmanifest|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|api/webhooks|api/platform|api/cron|favicon.ico|staff.webmanifest|driver.webmanifest|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
