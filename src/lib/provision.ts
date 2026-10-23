@@ -43,6 +43,18 @@ export async function freeSlug(wanted: string): Promise<string> {
   throw new Error("No free address for this company name");
 }
 
+/** Is this the email of a platform owner? (Owners must never become a company's login.) */
+export async function isOwnerEmail(email: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const clean = email.trim().toLowerCase();
+  const { data: owners } = await admin.from("platform_admins").select("user_id").limit(20);
+  for (const o of owners ?? []) {
+    const { data } = await admin.auth.admin.getUserById(o.user_id as string);
+    if (data.user?.email?.toLowerCase() === clean) return true;
+  }
+  return false;
+}
+
 export const siteOrigin = (fallback?: string) => (process.env.NEXT_PUBLIC_SITE_URL || fallback || "").replace(/\/$/, "");
 
 /**
@@ -126,7 +138,7 @@ export async function provisionCompany(p: ProvisionInput): Promise<ProvisionResu
 
   // One login per email address across the platform.
   const { data: taken } = await admin.from("profiles").select("id").eq("email", email).maybeSingle();
-  if (taken) return { ok: false, error: "email_in_use" };
+  if (taken || (await isOwnerEmail(email))) return { ok: false, error: "email_in_use" };
 
   const slug = await freeSlug(name);
   const { data: company, error: cErr } = await admin

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPlatformStripe } from "@/lib/stripe";
 import { rateLimit, clientIp } from "@/lib/rateLimit";
-import { siteOrigin } from "@/lib/provision";
+import { siteOrigin, isOwnerEmail } from "@/lib/provision";
 
 /**
  * Start a new company's subscription: Stripe Checkout on the platform owner's
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   if (!plan) return NextResponse.json({ ok: false, error: "unknown_plan" });
 
   const { data: inUse } = await admin.from("profiles").select("id").eq("email", email).maybeSingle();
-  if (inUse) return NextResponse.json({ ok: false, error: "email_in_use" });
+  if (inUse || (await isOwnerEmail(email))) return NextResponse.json({ ok: false, error: "email_in_use" });
 
   const stripe = await getPlatformStripe();
   if (!stripe || !plan.stripe_price_id) {
