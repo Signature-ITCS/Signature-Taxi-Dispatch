@@ -55,6 +55,7 @@ export async function POST(req: Request) {
         await onPaymentFailed(event.data.object, origin);
         break;
       case "invoice.paid":
+      case "invoice.payment_succeeded": // either one may be ticked in Stripe; handling is idempotent
         await onInvoicePaid(stripe, event.data.object, origin);
         break;
       default:

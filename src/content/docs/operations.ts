@@ -176,6 +176,8 @@ At a limit, adding more is refused with an upgrade message. Bookings count per c
         title: "Pay invoices, change plan or cancel",
         body: `**How you pay:** every month (from the end of your free trial) you get an **invoice by email**. Press **Pay** in it and type your card in on Stripe's secure page. Your card is **never saved and never charged automatically** — nothing is taken unless you pay an invoice yourself. Each invoice is due 7 days after it is sent.
 
+**Admin → Plan & billing → Invoices** lists all your invoices: amount, **Paid / Due / Overdue**, the due date or the day you paid, a **Pay now** button on any unpaid one, and a **PDF** of each.
+
 Press **Manage billing** to open Stripe's secure page where you can:
 
 - see and pay open invoices,

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Building2, Tags, LifeBuoy, Settings, ScrollText, LogOut, Crown, BookOpen } from "lucide-react";
+import { LayoutDashboard, Building2, Tags, LifeBuoy, Settings, ScrollText, LogOut, Crown, BookOpen, Receipt } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 const NAV = [
   { href: "/master", label: "Overview", icon: LayoutDashboard },
   { href: "/master/companies", label: "Companies", icon: Building2 },
   { href: "/master/plans", label: "Plans", icon: Tags },
+  { href: "/master/billing", label: "Billing", icon: Receipt },
   { href: "/master/requests", label: "Requests", icon: LifeBuoy },
   { href: "/master/settings", label: "Platform settings", icon: Settings },
   { href: "/master/audit", label: "Audit log", icon: ScrollText },

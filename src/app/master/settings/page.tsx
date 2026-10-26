@@ -84,7 +84,7 @@ export default function PlatformSettingsPage() {
       {msg && <p className={`rounded-xl p-3 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{msg.text}</p>}
       {!d.encryption_ready && (
         <p className="flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
-          <AlertTriangle className="h-4 w-4 shrink-0" /> {d.encryption_problem ?? "SECRETS_ENCRYPTION_KEY isn't usable."} No keys can be saved (yours or companies') until it is fixed.
+          <AlertTriangle className="h-4 w-4 shrink-0" /> {d.encryption_problem ?? "SECRETS_ENCRYPTION_KEY isn't usable."} No keys can be saved (yours or companies&apos;) until it is fixed.
         </p>
       )}
 

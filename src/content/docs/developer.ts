@@ -107,6 +107,13 @@ Redeploy after changing them. Everything else (Stripe, Resend) is set in the mas
 After changing a price press **Sync to Stripe**: it creates the product and a new monthly price in your Stripe. A plan can only be bought on the website once synced. Existing subscribers keep their old price until moved in Stripe.`,
       },
       {
+        id: "billing",
+        title: "Billing",
+        body: `**Master → Billing** lists every company's subscription invoices from the last 13 months, live from your Stripe: company, invoice number, date, amount, **Paid / Due / Overdue**, and the due or paid date. Filter by **Unpaid**, **Overdue** or **Paid**, or search by company.
+
+At the top: **collected this month**, **waiting to be paid**, and **overdue** (amount, invoices and companies). Click a company to open it; **Stripe ↗** opens the invoice in your Stripe dashboard.`,
+      },
+      {
         id: "requests",
         title: "Requests",
         body: `Setup help and restore requests from companies. Mark them **paid**, **in progress** or **done**. Restores are done from **Companies → the company → Backups**.`,
@@ -138,7 +145,7 @@ After changing a price press **Sync to Stripe**: it creates the product and a ne
    - \`customer.subscription.created\`
    - \`customer.subscription.updated\`
    - \`customer.subscription.deleted\`
-   - \`invoice.paid\`
+   - \`invoice.paid\` — if you can't find it, tick \`invoice.payment_succeeded\` instead (either works)
    - \`invoice.payment_failed\`
 3. Copy the endpoint's **Signing secret** (\`whsec_…\`) into **Webhook signing secret** and save.`,
       },

@@ -7,6 +7,7 @@ import { listPlans } from "@/lib/billing";
 import { getServices, getSupportEmail } from "@/lib/services";
 import { homeForRole } from "@/lib/auth";
 import AccountActions from "./AccountActions";
+import Invoices from "./Invoices";
 
 export const metadata = { title: "Plan & billing" };
 
@@ -88,7 +89,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             </div>
             <div className="mt-3 space-y-1 text-sm text-gray-600">
               {c.status === "trialing" && day(c.trial_ends_at) && <p>Free trial until {day(c.trial_ends_at)}.</p>}
-              {c.status !== "trialing" && day(c.current_period_end) && <p>Next payment on {day(c.current_period_end)}.</p>}
+              {c.status !== "trialing" && day(c.current_period_end) && <p>Next invoice on {day(c.current_period_end)}.</p>}
             </div>
 
             <div className="mt-6 space-y-4">
@@ -118,6 +119,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
               </p>
             </div>
           </section>
+
+          {isAdmin && c.stripe_customer_id && <Invoices />}
 
           {isAdmin ? (
             <AccountActions

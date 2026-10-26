@@ -72,7 +72,10 @@ function Companies() {
     ]);
     if (c?.ok) setCompanies(c.companies);
     if (p?.ok) setPlans(p.plans);
-  }, []);
+    // ?open=<company id> (links from Billing) opens that company straight away.
+    const openId = params.get("open");
+    if (c?.ok && openId) setOpen((cur) => cur ?? (c.companies as Company[]).find((x) => x.id === openId) ?? null);
+  }, [params]);
   useEffect(() => {
     load();
   }, [load]);
