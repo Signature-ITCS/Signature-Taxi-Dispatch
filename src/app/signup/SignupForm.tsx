@@ -17,6 +17,8 @@ const ERRORS: Record<string, string> = {
   unknown_plan: "Choose a plan.",
   signups_closed: "Sign-ups are not open yet. Please get in touch with us.",
   rate_limited: "Too many attempts. Try again in a little while.",
+  create_failed: "We couldn't create your account. Please try again, or get in touch with us.",
+  payment_provider_error: "Our payment provider didn't respond. Please try again in a minute.",
 };
 
 export default function SignupForm({
@@ -104,10 +106,14 @@ export default function SignupForm({
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button disabled={busy}
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white disabled:opacity-60">
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Continue to secure payment
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}{" "}
+        {chosen && chosen.trialDays > 0 ? "Start free trial" : "Continue to secure payment"}
       </button>
       <p className="text-center text-xs text-gray-400">
-        You&apos;ll add a card on Stripe&apos;s secure page. Your login details arrive by email straight after.
+        {chosen && chosen.trialDays > 0
+          ? "No card needed. Your login details arrive by email straight away."
+          : "Pay the first month on Stripe's secure page. Your login details arrive by email straight after."}{" "}
+        We never save your card or charge it automatically — each month you get an invoice by email and pay it yourself.
       </p>
       <p className="text-center text-sm">
         <Link href="/login" className="text-gray-500 hover:text-ink-950">Already have an account? Sign in</Link>

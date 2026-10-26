@@ -63,7 +63,7 @@ export default function AccountActions({
         </h2>
         {hasBilling ? (
           <>
-            <p className="mt-1 text-sm text-gray-600">Change plan, update your card, download invoices or cancel — on Stripe&apos;s secure page.</p>
+            <p className="mt-1 text-sm text-gray-600">Pay invoices, change plan, download receipts or cancel — on Stripe&apos;s secure page. Your card is never saved or charged automatically.</p>
             <button
               onClick={() => go("portal", "/api/account/portal")}
               disabled={!!busy}

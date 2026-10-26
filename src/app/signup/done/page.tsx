@@ -3,7 +3,7 @@ import { MailCheck } from "lucide-react";
 
 export const metadata = { title: "Check your email" };
 
-/** Back from Stripe after subscribing. The account is created by Stripe's confirmation. */
+/** After signing up for a free trial (the account is made straight away). */
 export default function SignupDonePage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-brand-50/60 to-white p-4">

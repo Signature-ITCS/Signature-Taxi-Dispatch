@@ -39,7 +39,7 @@ const FAQ: [string, string][] = [
   ["Do I need any technical knowledge?", "No. Sign up, choose your password and follow the setup checklist. If you'd rather not, we can set up payments, SMS and email for you."],
   ["Whose Stripe account do card payments go to?", "Yours. You connect your own Stripe account in Settings, so fares are paid straight to you."],
   ["Can I use my own domain and colours?", "Yes. Upload your logo, choose your colours, and your booking page, apps, emails and receipts all carry your brand."],
-  ["What happens after the free trial?", "Your card is charged monthly for the plan you chose. You can change plan or cancel at any time from Plan & billing."],
+  ["What happens after the free trial?", "You get an invoice by email each month and pay it with your card on Stripe's secure page. We never save your card or charge it automatically. Change plan or cancel any time from Plan & billing."],
   ["Is my data backed up?", "Every night, on every plan. Pro and Business can download and restore backups themselves; on Starter we restore for you on request."],
   ["Can I change plan later?", "Yes — upgrade or downgrade any time. If you reach your plan's driver, staff or booking limit, you'll be asked to upgrade."],
 ];
@@ -147,7 +147,7 @@ export default async function Home() {
           <h2 className="text-center font-display text-3xl font-bold">Up and running today</h2>
           <div className="mt-10 grid gap-6 md:grid-cols-3">
             {[
-              ["1", "Choose a plan", "Start your free trial — add a card on Stripe's secure page."],
+              ["1", "Choose a plan", "Start your free trial — no card needed."],
               ["2", "Set your password", "Your login arrives by email. Add your logo, prices and drivers."],
               ["3", "Take bookings", "Share your booking page or add the widget to your website."],
             ].map(([n, t, d]) => (

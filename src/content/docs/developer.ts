@@ -133,18 +133,26 @@ After changing a price press **Sync to Stripe**: it creates the product and a ne
         id: "webhook",
         title: "2. Webhook",
         body: `1. Copy the address shown in Platform settings (\`…/api/platform/stripe-webhook\`).
-2. Stripe → **Developers → Webhooks → Add destination**. Scope **Your account**, payload **Snapshot**, API version as shown. Search and tick these five (not "Select all"), then **Continue** → **Webhook endpoint** → **Continue** → paste the address as **Endpoint URL** → **Create destination**:
+2. Stripe → **Developers → Webhooks → Add destination**. Scope **Your account**, payload **Snapshot**, API version as shown. Search and tick these six (not "Select all"), then **Continue** → **Webhook endpoint** → **Continue** → paste the address as **Endpoint URL** → **Create destination**:
    - \`checkout.session.completed\`
    - \`customer.subscription.created\`
    - \`customer.subscription.updated\`
    - \`customer.subscription.deleted\`
+   - \`invoice.paid\`
    - \`invoice.payment_failed\`
 3. Copy the endpoint's **Signing secret** (\`whsec_…\`) into **Webhook signing secret** and save.`,
       },
       {
         id: "portal",
         title: "3. Customer portal",
-        body: `Stripe → **Settings → Billing → Customer portal**: switch it on, allow **switching plans** (add your plan products), **updating payment methods**, **invoice history** and **cancellation**. This is the page companies see when they press **Manage billing**.`,
+        body: `Stripe → **Settings → Billing → Customer portal**: switch it on, allow **switching plans** (add your plan products), **invoice history** and **cancellation**, and switch **payment methods OFF** — companies pay each invoice by typing a card in, nothing is kept on file. This is the page companies see when they press **Manage billing**.
+
+Stripe → **Settings → Billing → Subscriptions and emails**:
+
+- **Manage invoices sent to customers**: switch on emailing **finalised invoices** to customers (that email has the Pay button) and the reminders.
+- **When an invoice is still unpaid after its due date**: choose **cancel the subscription** (or mark it unpaid) after the number of days you allow.
+
+!> Subscriptions are billed by **invoice** (\`collection_method: send_invoice\`): no card is saved at signup and **Stripe never charges a card automatically**. Each month the company gets an invoice by email, due in 7 days, and pays it on Stripe's page.`,
       },
       {
         id: "plans",
@@ -154,9 +162,10 @@ After changing a price press **Sync to Stripe**: it creates the product and a ne
       {
         id: "lifecycle",
         title: "What happens automatically",
-        body: `- A visitor subscribes → Stripe confirms → the company and its owner login are created and the welcome email is sent.
+        body: `- A visitor signs up for a plan with a free trial → the company and its owner login are created straight away (no card asked for) and the welcome email is sent. A plan without a trial: they pay the first invoice first, and the account is made when Stripe confirms it was paid.
+- Each month (from the end of the trial) Stripe emails the company an invoice; they pay it on Stripe's page. **No card is saved and nothing is charged automatically.**
 - Plan changed in the portal → the company's plan and limits follow.
-- Payment fails → company shows "Payment overdue" (still working) and you are emailed.
+- Invoice not paid by its due date → company shows "Payment overdue" (still working) and you are emailed.
 - Subscription cancelled (by the company, or by Stripe after its retries — set in Stripe → Settings → Billing → Subscriptions and emails) → company is cancelled: switched off, data kept until you delete it.
 - You can always suspend or reactivate a company by hand in Master → Companies.`,
       },

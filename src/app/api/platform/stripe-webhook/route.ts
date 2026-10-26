@@ -12,9 +12,12 @@ import { audit } from "@/lib/tenant";
  *
  * Setup (master dashboard → Settings shows the URL): Stripe Dashboard →
  * Developers → Webhooks → add https://<platform>/api/platform/stripe-webhook,
- * events checkout.session.completed, customer.subscription.updated,
- * customer.subscription.deleted, invoice.payment_failed — and save the signing
- * secret in the master dashboard.
+ * events checkout.session.completed, customer.subscription.created,
+ * customer.subscription.updated, customer.subscription.deleted, invoice.paid,
+ * invoice.payment_failed — and save the signing secret in the master dashboard.
+ *
+ * Subscriptions are paid by monthly invoice (collection_method send_invoice):
+ * no card is saved and nothing is charged automatically.
  *
  * Every handler is idempotent: Stripe retries deliveries for days.
  */
@@ -50,6 +53,9 @@ export async function POST(req: Request) {
         break;
       case "invoice.payment_failed":
         await onPaymentFailed(event.data.object, origin);
+        break;
+      case "invoice.paid":
+        await onInvoicePaid(stripe, event.data.object, origin);
         break;
       default:
         break;
@@ -104,6 +110,52 @@ async function onCheckoutCompleted(stripe: Stripe, session: Stripe.Checkout.Sess
     const table = meta.kind === "setup" ? "setup_requests" : "restore_requests";
     await admin.from(table).update({ paid: true, updated_at: new Date().toISOString() }).eq("id", meta.request_id);
     await audit(`${meta.kind}_paid`, { companyId: meta.company_id ?? null, detail: { request: meta.request_id } });
+  }
+}
+
+/**
+ * A signup without a free trial pays its first invoice before the account
+ * exists (see /api/signup) — make the account now. Later invoices of an
+ * existing company need nothing here: their subscription events keep its
+ * status up to date.
+ */
+async function onInvoicePaid(stripe: Stripe, invoice: Stripe.Invoice, origin: string) {
+  const details = invoice.parent?.subscription_details;
+  const subRef = details?.subscription;
+  const subId = typeof subRef === "string" ? subRef : subRef?.id;
+  const meta = details?.metadata ?? {};
+  if (!subId || meta.kind !== "signup") return;
+  const { data: existing } = await createAdminClient().from("companies").select("id").eq("stripe_subscription_id", subId).maybeSingle();
+  if (existing) return;
+
+  const sub = await stripe.subscriptions.retrieve(subId);
+  const f = companyFieldsFromSubscription(sub);
+  const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id ?? null;
+  const email = invoice.customer_email ?? "";
+  const result = await provisionCompany({
+    companyName: meta.company_name ?? "",
+    ownerName: meta.full_name ?? "",
+    ownerEmail: email,
+    planId: meta.plan_id ?? "",
+    status: f.status,
+    trialEndsAt: f.trial_ends_at,
+    currentPeriodEnd: f.current_period_end,
+    stripeCustomerId: customerId,
+    stripeSubscriptionId: subId,
+    origin,
+  });
+  if (!result.ok) {
+    await notifyOwner(
+      "Signup paid but the account could not be created",
+      [
+        ["Company", meta.company_name ?? ""],
+        ["Email", email],
+        ["Problem", result.error],
+        ["Stripe subscription", subId],
+      ],
+      `${origin}/master/companies`
+    );
+    if (result.error !== "email_in_use") throw new Error(`provision failed: ${result.error}`);
   }
 }
 

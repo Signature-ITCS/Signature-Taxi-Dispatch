@@ -173,20 +173,22 @@ At a limit, adding more is refused with an upgrade message. Bookings count per c
       },
       {
         id: "manage",
-        title: "Change plan, card or cancel",
-        body: `Press **Manage billing**. Stripe's secure page opens where you can:
+        title: "Pay invoices, change plan or cancel",
+        body: `**How you pay:** every month (from the end of your free trial) you get an **invoice by email**. Press **Pay** in it and type your card in on Stripe's secure page. Your card is **never saved and never charged automatically** — nothing is taken unless you pay an invoice yourself. Each invoice is due 7 days after it is sent.
 
+Press **Manage billing** to open Stripe's secure page where you can:
+
+- see and pay open invoices,
 - switch to another plan,
-- update your card,
-- download invoices,
+- download invoices and receipts,
 - cancel.
 
 Changes apply straight away.`,
       },
       {
         id: "unpaid",
-        title: "If a payment fails",
-        body: `Your account keeps working while Stripe retries the payment ("Payment overdue"). Update your card with **Manage billing**. If the subscription ends unpaid, the account is **switched off**: the booking page, dispatch board and driver app stop — your data is kept, and everything comes back when you subscribe again.`,
+        title: "If an invoice isn't paid",
+        body: `After the due date your account keeps working for a while and shows **Payment overdue**. Pay the invoice from the email or from **Manage billing**. If the subscription ends unpaid, the account is **switched off**: the booking page, dispatch board and driver app stop — your data is kept, and everything comes back when you subscribe again.`,
       },
     ],
   },
