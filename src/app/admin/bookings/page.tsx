@@ -676,7 +676,13 @@ function BookingDetailModal({
   // ── Office controls: job status and payment, set by hand ────────────────
   // Refunds are NOT done from here — money goes back from the Stripe Dashboard,
   // and staff then mark the job "Refunded".
-  const [jobStatus, setJobStatus] = useState<JobStatus>(row.job_status ?? "processing");
+  // Processing follows the ride: a completed / cancelled ride shows as such
+  // (the database does the same — db/2026-10-26_sync_job_status.sql).
+  const [jobStatus, setJobStatus] = useState<JobStatus>(() => {
+    const js = row.job_status ?? "processing";
+    if (js !== "processing") return js;
+    return row.status === "completed" ? "completed" : row.status === "cancelled" ? "cancelled" : js;
+  });
   const [pay, setPay] = useState<{ method: PaymentMethod; status: PaymentStatus }>({
     method: row.payment_method,
     status: row.payment_status,
