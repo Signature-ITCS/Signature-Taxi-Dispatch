@@ -23,8 +23,11 @@ export async function GET() {
   const rows: (InvoiceRow & { company: { id: string; name: string; slug: string; status: string } | null })[] = [];
   try {
     for await (const inv of stripe.invoices.list({ limit: 100, created: { gte: since } })) {
+      // The Stripe account may also bill other businesses: only this
+      // platform's companies' invoices are listed and counted.
       const r = invoiceRow(inv);
-      if (r) rows.push({ ...r, company: (r.customer && byCustomer.get(r.customer)) || null });
+      const company = r?.customer ? byCustomer.get(r.customer) : undefined;
+      if (r && company) rows.push({ ...r, company });
       if (rows.length >= 2000) break;
     }
   } catch (err) {
