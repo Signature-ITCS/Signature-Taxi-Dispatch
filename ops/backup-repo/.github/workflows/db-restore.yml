@@ -55,20 +55,31 @@ jobs:
       - name: Find the backup
         run: |
           set -euo pipefail
-          RUNS=$(gh run list -R "$GITHUB_REPOSITORY" --workflow db-backup.yml --status success --limit 200 \
-                   --json databaseId,createdAt)
+          mkdir -p backup
+          # The one-year copies (releases "backup-<date>") first…
           if [ "$BACKUP_DATE" = "latest" ]; then
-            RUN_ID=$(echo "$RUNS" | jq -r 'sort_by(.createdAt) | last | .databaseId // empty')
+            TAG=$(gh release list -R "$GITHUB_REPOSITORY" --limit 1000 --json tagName --jq '.[].tagName' | grep '^backup-' | sort | tail -1 || true)
           else
-            RUN_ID=$(echo "$RUNS" | jq -r --arg d "$BACKUP_DATE" \
-                       '[.[] | select(.createdAt | startswith($d))] | sort_by(.createdAt) | last | .databaseId // empty')
+            TAG="backup-$BACKUP_DATE"
           fi
-          if [ -z "$RUN_ID" ]; then
-            echo "::error::No successful backup found for '$BACKUP_DATE'. Backups on GitHub are kept 90 days."
-            exit 1
+          if [ -n "$TAG" ] && gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p 'platform-db-*.sql.gz' -D backup 2>/dev/null; then
+            echo "Using release $TAG"
+          else
+            # …then the 30-day copies attached to the backup runs.
+            RUNS=$(gh run list -R "$GITHUB_REPOSITORY" --workflow db-backup.yml --status success --limit 200                      --json databaseId,createdAt)
+            if [ "$BACKUP_DATE" = "latest" ]; then
+              RUN_ID=$(echo "$RUNS" | jq -r 'sort_by(.createdAt) | last | .databaseId // empty')
+            else
+              RUN_ID=$(echo "$RUNS" | jq -r --arg d "$BACKUP_DATE"                          '[.[] | select(.createdAt | startswith($d))] | sort_by(.createdAt) | last | .databaseId // empty')
+            fi
+            if [ -z "$RUN_ID" ]; then
+              echo "::error::No backup found for '$BACKUP_DATE'. Backups are kept 365 days (Releases)."
+              exit 1
+            fi
+            echo "Using backup run $RUN_ID"
+            gh run download "$RUN_ID" -R "$GITHUB_REPOSITORY" -n db-backup -D backup
           fi
-          echo "Using backup run $RUN_ID"
-          gh run download "$RUN_ID" -R "$GITHUB_REPOSITORY" -n db-backup -D backup
+          rm -f backup/companies-*.tar.gz
           gunzip backup/*.sql.gz
           ls -lh backup
 

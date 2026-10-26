@@ -1,10 +1,15 @@
 # Daily database backup — a complete .sql file of the dispatch database.
 #
 # Runs every night (and on demand from Actions → "Back up database" → Run
-# workflow). Each backup is kept:
-#   • on GitHub, attached to that run, for 90 days (always);
-#   • in Google Drive, folder "Dispatch Platform Backups", last 60 days (only once
-#     the RCLONE_CONFIG secret is set — see db/BACKUPS.md).
+# workflow). Each night makes two files:
+#   • platform-db-<date>.sql.gz   the whole database (every company);
+#   • companies-<date>.tar.gz     one JSON file per company, for restoring a
+#                                 single company ("Restore one company").
+# Both are kept:
+#   • on GitHub, attached to that run, for 30 days;
+#   • on GitHub as a private release "backup-<date>", for 365 days;
+#   • in Google Drive, folder "Dispatch Platform Backups", 365 days (only once
+#     the RCLONE_CONFIG secret is set — see README.md).
 #
 # Needs one repository secret:
 #   SUPABASE_DB_URL  Supabase → Connect → "Session pooler" connection string,
@@ -20,7 +25,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write # releases (the one-year copies)
 
 concurrency:
   group: db-backup
@@ -36,10 +41,12 @@ jobs:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       RCLONE_CONFIG_B64: ${{ secrets.RCLONE_CONFIG }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Check the database secret is set
         run: |
           if [ -z "$SUPABASE_DB_URL" ]; then
-            echo "::error::Add the SUPABASE_DB_URL secret (Settings → Secrets and variables → Actions). See db/BACKUPS.md."
+            echo "::error::Add the SUPABASE_DB_URL secret (Settings → Secrets and variables → Actions). See README.md."
             exit 1
           fi
 
@@ -64,7 +71,7 @@ jobs:
           {
             echo "-- the dispatch platform — database backup $STAMP (UTC)"
             echo "-- Restore: paste this whole file into Supabase → SQL Editor and Run,"
-            echo "-- or use the 'Restore database' GitHub workflow. See db/BACKUPS.md."
+            echo "-- or use the 'Restore database' GitHub workflow. See README.md."
             echo
             echo "-- ── 1. All app tables, functions, triggers, policies and data (schema public) ──"
             # Plain INSERT statements (not COPY), so the file also runs in the
@@ -107,13 +114,52 @@ jobs:
           gzip -k -9 "$FILE"
           ls -lh "$FILE" "$FILE.gz"
 
-      - name: Keep it on GitHub (90 days)
+      - name: Export each company separately
+        run: |
+          set -euo pipefail
+          STAMP=$(date -u +%Y-%m-%d)
+          DIR="companies-$STAMP"
+          mkdir -p "$DIR"
+          psql "$SUPABASE_DB_URL" -At -F ' ' -c "select id, slug, name from public.companies order by slug" > "$DIR/index.txt"
+          while read -r id slug name; do
+            psql "$SUPABASE_DB_URL" -At -v ON_ERROR_STOP=1 -v cid="$id" -f .github/scripts/export-company.sql < /dev/null > "$DIR/$slug.json"
+            # Every file must be a backup of exactly that company.
+            jq -e --arg id "$id" '.company_id == $id and (.tables | type == "object")' "$DIR/$slug.json" > /dev/null               || { echo "::error::Export of $slug looks wrong"; exit 1; }
+            echo "$slug: $(jq '[.tables[] | length] | add' "$DIR/$slug.json") rows"
+          done < "$DIR/index.txt"
+          tar -czf "$DIR.tar.gz" "$DIR"
+          echo "COMPANIES=$DIR.tar.gz" >> "$GITHUB_ENV"
+          ls -lh "$DIR.tar.gz"
+
+      - name: Keep it on GitHub (30 days, attached to this run)
         uses: actions/upload-artifact@v4
         with:
           name: db-backup
-          path: ${{ env.FILE }}.gz
-          retention-days: 90
+          path: |
+            ${{ env.FILE }}.gz
+            ${{ env.COMPANIES }}
+          retention-days: 30
           if-no-files-found: error
+
+      - name: Keep it for a year (private release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="backup-$(date -u +%Y-%m-%d)"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "$FILE.gz" "$COMPANIES" --clobber
+          else
+            gh release create "$TAG" "$FILE.gz" "$COMPANIES" --title "$TAG" --notes "Nightly database backup."
+          fi
+          # Remove yearly copies older than 365 days.
+          CUTOFF=$(date -u -d '365 days ago' +%Y-%m-%d)
+          gh release list --limit 1000 --json tagName --jq '.[].tagName' | grep '^backup-' | while read -r t; do
+            if [[ "${t#backup-}" < "$CUTOFF" ]]; then
+              echo "Removing $t (older than a year)"
+              gh release delete "$t" --yes --cleanup-tag
+            fi
+          done
 
       - name: Copy it to Google Drive
         if: env.RCLONE_CONFIG_B64 != ''
@@ -123,6 +169,7 @@ jobs:
           mkdir -p ~/.config/rclone
           echo "$RCLONE_CONFIG_B64" | base64 -d > ~/.config/rclone/rclone.conf
           rclone copy "$FILE.gz" "gdrive:Dispatch Platform Backups" --no-traverse
-          # Keep the last 60 days in Drive.
-          rclone delete "gdrive:Dispatch Platform Backups" --min-age 60d --include "platform-db-*.sql.gz"
+          rclone copy "$COMPANIES" "gdrive:Dispatch Platform Backups" --no-traverse
+          # Keep the last 365 days in Drive.
+          rclone delete "gdrive:Dispatch Platform Backups" --min-age 365d --include "platform-db-*.sql.gz" --include "companies-*.tar.gz"
           echo "Copied to Google Drive: Dispatch Platform Backups/$FILE.gz"

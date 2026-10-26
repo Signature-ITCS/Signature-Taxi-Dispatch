@@ -1,0 +1,133 @@
+# Restore ONE company from a nightly backup — every other company is untouched.
+#
+# Actions → "Restore one company" → Run workflow → the company's address name
+# (slug, e.g. "skyline" for booking.airport-transfer.uk/skyline), the backup
+# date (or "latest"), and type the slug again to confirm → Run.
+#
+# What it does:
+#   1. finds that night's companies-<date>.tar.gz (one-year releases first, then
+#      the 30-day run attachments) and takes that company's file out of it;
+#   2. saves the company as it is RIGHT NOW (attached to this run, 90 days), so
+#      the restore itself can be undone;
+#   3. if the company was deleted, puts its company row back first (its logins
+#      are not restored: re-send the welcome email from the master dashboard);
+#   4. runs restore_company() — the same database function the app's own
+#      restores use: one transaction, only this company's rows, no texts or
+#      emails sent.
+#
+# Bookings this company made after that backup are lost.
+
+name: Restore one company
+
+on:
+  workflow_dispatch:
+    inputs:
+      company:
+        description: "Company address name (slug), e.g. skyline"
+        required: true
+      backup_date:
+        description: "Backup date, YYYY-MM-DD (UTC), or 'latest'"
+        required: true
+        default: latest
+      confirm:
+        description: "Type the company address name again to confirm"
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      GH_TOKEN: ${{ github.token }}
+      SLUG: ${{ inputs.company }}
+      BACKUP_DATE: ${{ inputs.backup_date }}
+      CONFIRM: ${{ inputs.confirm }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Safety check
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then echo "::error::The SUPABASE_DB_URL secret is not set."; exit 1; fi
+          if ! [[ "$SLUG" =~ ^[a-z0-9][a-z0-9-]{1,40}$ ]]; then echo "::error::'$SLUG' is not a company address name."; exit 1; fi
+          if [ "$CONFIRM" != "$SLUG" ]; then echo "::error::Type the same company address name in the confirm box."; exit 1; fi
+
+      - name: Find the backup
+        run: |
+          set -euo pipefail
+          mkdir -p backup
+          if [ "$BACKUP_DATE" = "latest" ]; then
+            TAG=$(gh release list -R "$GITHUB_REPOSITORY" --limit 1000 --json tagName --jq '.[].tagName' | grep '^backup-' | sort | tail -1 || true)
+          else
+            TAG="backup-$BACKUP_DATE"
+          fi
+          if [ -n "$TAG" ] && gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p 'companies-*.tar.gz' -D backup 2>/dev/null; then
+            echo "Using release $TAG"
+          else
+            RUNS=$(gh run list -R "$GITHUB_REPOSITORY" --workflow db-backup.yml --status success --limit 200 --json databaseId,createdAt)
+            if [ "$BACKUP_DATE" = "latest" ]; then
+              RUN_ID=$(echo "$RUNS" | jq -r 'sort_by(.createdAt) | last | .databaseId // empty')
+            else
+              RUN_ID=$(echo "$RUNS" | jq -r --arg d "$BACKUP_DATE" '[.[] | select(.createdAt | startswith($d))] | sort_by(.createdAt) | last | .databaseId // empty')
+            fi
+            [ -n "$RUN_ID" ] || { echo "::error::No backup found for '$BACKUP_DATE'."; exit 1; }
+            gh run download "$RUN_ID" -R "$GITHUB_REPOSITORY" -n db-backup -D backup
+          fi
+          ls backup/companies-*.tar.gz > /dev/null 2>&1 || { echo "::error::That backup has no per-company files (made before they were added). Use 'Restore database' or ask for a manual extract."; exit 1; }
+          tar -xzf backup/companies-*.tar.gz -C backup
+          F=$(ls backup/companies-*/"$SLUG".json 2>/dev/null | head -1 || true)
+          [ -n "$F" ] || { echo "::error::No company '$SLUG' in that backup. Companies in it:"; cat backup/companies-*/index.txt; exit 1; }
+          cp "$F" company.json
+          jq -r '"Backup of \(.company.name) (\(.company_id)) taken \(.exported_at)"' company.json
+          jq -r '.tables | to_entries[] | "  \(.key): \(.value | length)"' company.json
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Save the company as it is now (undo copy)
+        run: |
+          set -euo pipefail
+          CID=$(jq -r .company_id company.json)
+          echo "CID=$CID" >> "$GITHUB_ENV"
+          if [ "$(psql "$SUPABASE_DB_URL" -At -v cid="$CID" -c "select count(*) from public.companies where id = :'cid'::uuid")" = "1" ]; then
+            psql "$SUPABASE_DB_URL" -At -v ON_ERROR_STOP=1 -v cid="$CID" -f .github/scripts/export-company.sql > before-restore.json
+          else
+            echo "The company no longer exists — it will be re-created from the backup." | tee before-restore.json
+          fi
+
+      - name: Keep the undo copy (90 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: before-restore-${{ inputs.company }}
+          path: before-restore.json
+          retention-days: 90
+
+      - name: Restore the company
+        run: |
+          set -euo pipefail
+          # The slug must still belong to the same company (or be free).
+          OTHER=$(psql "$SUPABASE_DB_URL" -At -v slug="$SLUG" -v cid="$CID" -c "select count(*) from public.companies where slug = :'slug' and id <> :'cid'::uuid")
+          [ "$OTHER" = "0" ] || { echo "::error::Another company now uses the address '$SLUG'. Nothing was changed."; exit 1; }
+          jq -c . company.json > restore.json
+          # One transaction: company row (only if missing), then all its data.
+          # If anything fails, psql stops and the transaction is rolled back.
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -At <<'SQL'
+          \set data `cat restore.json`
+          begin;
+          insert into public.companies
+            select * from jsonb_populate_record(null::public.companies, (:'data'::jsonb) -> 'company')
+            on conflict (id) do nothing;
+          select restore_company(((:'data'::jsonb) ->> 'company_id')::uuid, :'data'::jsonb);
+          commit;
+          SQL
+          echo "Company '$SLUG' restored."

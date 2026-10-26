@@ -17,18 +17,28 @@
 > Also turn on two-factor sign-in for the GitHub account.
 
 Every night at 02:30 (UK time is 02:30 in winter, 03:30 in summer) GitHub makes
-a complete backup of the dispatch database as a `.sql` file:
+two files:
 
-- **all app data** — bookings, customers, drivers, payments, pricing, settings,
-  logs — plus every table, function, trigger and security rule;
-- **staff and driver logins** (Supabase auth users).
+- **`platform-db-<date>.sql.gz`** — the complete database: all app data
+  (bookings, customers, drivers, payments, pricing, settings, logs), every
+  table, function, trigger and security rule, and staff/driver logins;
+- **`companies-<date>.tar.gz`** — one JSON file per company (`<slug>.json`),
+  for putting back a single company without touching the others.
 
-Where it is kept:
+Where they are kept:
 
 | Place | How long | Set-up |
 |---|---|---|
-| GitHub (Actions → "Back up database" → a run → **Artifacts**) | 90 days | the one secret below |
-| Google Drive, folder **Dispatch Platform Backups** | 60 days | optional, see step 3 |
+| GitHub **Releases** (private), `backup-<date>` | **365 days** | the one secret below |
+| GitHub (Actions → "Back up database" → a run → **Artifacts**) | 30 days | the one secret below |
+| Google Drive, folder **Dispatch Platform Backups** | 365 days | optional, see step 4 |
+
+Restores (Actions → Run workflow):
+
+| Workflow | What it puts back |
+|---|---|
+| **Restore one company** | one company, from any night in the last year — everyone else untouched |
+| **Restore database** | the whole database, every company — for a crashed or wiped database |
 
 ## 1. Turn it on (once)
 
@@ -44,13 +54,30 @@ Where it is kept:
 3. **Test it:** **Actions → Back up database → Run workflow**. After a minute or
    two the run turns green and shows a `db-backup` artifact you can download.
 
-## 2. Restore
+## 2. Restore ONE company (others untouched)
+
+**Actions → Restore one company → Run workflow**
+
+- *Company*: its address name (slug) — e.g. `skyline` for `booking.airport-transfer.uk/skyline`
+- *Backup date*: `latest`, or a date like `2026-10-14` (any night in the last year)
+- *Confirm*: type the address name again
+
+It first saves the company as it is now (attached to that run, so the restore
+can be undone), then puts back all of that company's bookings, customers,
+drivers, cars, prices, settings and history in one transaction — no texts or
+emails are sent, and no other company is touched. If the company had been
+deleted, its company row is put back too; its logins are not, so re-send the
+welcome email from Master → Companies and re-invite drivers.
+
+Anything that company booked after that backup is lost.
+
+## 3. Restore the WHOLE database
 
 ### Option A — paste into Supabase (no tools needed)
 
-1. GitHub → **Actions → Back up database** → open the run for the day you want
-   → **Artifacts → db-backup** → download and unzip it (you get a `.sql.gz`;
-   unzip that too, e.g. with 7-Zip, to get the `.sql` file).
+1. GitHub → **Releases** → `backup-<date>` → download `platform-db-<date>.sql.gz`
+   (or, for the last 30 days, **Actions → Back up database** → that night's run
+   → **Artifacts → db-backup**) and unzip it, e.g. with 7-Zip, to get the `.sql` file.
 2. Open the `.sql` file in a text editor, select all, copy.
 3. **Supabase → SQL Editor → New query** → paste → **Run**.
 
@@ -90,9 +117,9 @@ psql "SESSION_POOLER_CONNECTION_STRING" -v ON_ERROR_STOP=1 --single-transaction 
 
 (Logins that already exist are skipped automatically.)
 
-## 3. Also keep a copy in Google Drive (optional)
+## 4. Also keep a copy in Google Drive (optional)
 
-GitHub keeps 90 days. To have a copy in your own Google Drive as well:
+GitHub keeps a year. To have a copy in your own Google Drive as well:
 
 1. On a computer, install **rclone** (https://rclone.org/downloads/).
 2. Run `rclone config` → `n` (new remote) → name **`gdrive`** → storage
@@ -107,7 +134,7 @@ GitHub keeps 90 days. To have a copy in your own Google Drive as well:
    paste that text.
 
 From the next night on, each backup is also copied to **Dispatch Platform Backups**
-in that Drive, and copies older than 60 days are removed.
+in that Drive, and copies older than 365 days are removed.
 
 The `.sql` files contain customer names, phone numbers and logins (password
 hashes, not passwords). Keep the Drive folder private.
