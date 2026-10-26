@@ -99,7 +99,9 @@ jobs:
           set -euo pipefail
           CID=$(jq -r .company_id company.json)
           echo "CID=$CID" >> "$GITHUB_ENV"
-          if [ "$(psql "$SUPABASE_DB_URL" -At -v cid="$CID" -c "select count(*) from public.companies where id = :'cid'::uuid")" = "1" ]; then
+          # (psql fills in :'variables' only in SQL read from stdin or a file, not in -c.)
+          EXISTS=$(psql "$SUPABASE_DB_URL" -At -v ON_ERROR_STOP=1 -v cid="$CID" <<< "select count(*) from public.companies where id = :'cid'::uuid;")
+          if [ "$EXISTS" = "1" ]; then
             psql "$SUPABASE_DB_URL" -At -v ON_ERROR_STOP=1 -v cid="$CID" -f .github/scripts/export-company.sql > before-restore.json
           else
             echo "The company no longer exists — it will be re-created from the backup." | tee before-restore.json
@@ -116,7 +118,7 @@ jobs:
         run: |
           set -euo pipefail
           # The slug must still belong to the same company (or be free).
-          OTHER=$(psql "$SUPABASE_DB_URL" -At -v slug="$SLUG" -v cid="$CID" -c "select count(*) from public.companies where slug = :'slug' and id <> :'cid'::uuid")
+          OTHER=$(psql "$SUPABASE_DB_URL" -At -v ON_ERROR_STOP=1 -v slug="$SLUG" -v cid="$CID" <<< "select count(*) from public.companies where slug = :'slug' and id <> :'cid'::uuid;")
           [ "$OTHER" = "0" ] || { echo "::error::Another company now uses the address '$SLUG'. Nothing was changed."; exit 1; }
           jq -c . company.json > restore.json
           # One transaction: company row (only if missing), then all its data.
