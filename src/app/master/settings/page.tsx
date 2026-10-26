@@ -2,7 +2,7 @@
 
 import HelpLink from "@/components/docs/HelpLink";
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Save, Copy, Check, AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { Loader2, Save, AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { SecretInput, useSecretFields, type SecretStatus } from "@/components/SecretInput";
 
 interface Pkg {
@@ -18,19 +18,16 @@ interface Data {
   encryption_ready: boolean;
   encryption_problem: string | null;
   env_fallbacks: Record<string, boolean>;
-  stripe_webhook_url: string;
 }
 
 const ERRORS: Record<string, string> = {
   invalid_support_email: "The support email isn't valid.",
   invalid_from_email: "The sender email isn't valid.",
-  invalid_stripe_secret_key: "That isn't a Stripe secret key (sk_live_… / sk_test_…).",
-  invalid_stripe_webhook_secret: "That isn't a webhook signing secret (whsec_…).",
   invalid_resend_api_key: "That isn't a Resend API key (re_…).",
   encryption_not_configured: "Set SECRETS_ENCRYPTION_KEY in Vercel first, then redeploy.",
 };
 
-/** The platform's own name, addresses, paid services and keys (Stripe for subscriptions, Resend for its emails). */
+/** The platform's own name, addresses, paid services and email key (Resend). Subscriptions are billed by hand (Billing). */
 export default function PlatformSettingsPage() {
   const [d, setD] = useState<Data | null>(null);
   const [platform, setPlatform] = useState({ name: "", support_email: "", from_email: "" });
@@ -40,7 +37,6 @@ export default function PlatformSettingsPage() {
   const fields = useSecretFields();
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/master/settings").then((r) => r.json()).catch(() => null);
@@ -104,29 +100,12 @@ export default function PlatformSettingsPage() {
       </section>
 
       <section className="space-y-3 rounded-2xl border border-gray-100 bg-white p-5">
-        <h2 className="flex items-center gap-3 font-semibold text-ink-950">Your Stripe (company subscriptions) <HelpLink to="platform-stripe" /></h2>
-        <p className="text-sm text-gray-600">
-          Companies pay their subscriptions into this account. In Stripe → Developers → Webhooks, add this address for the events
-          checkout.session.completed, customer.subscription.created, customer.subscription.updated, customer.subscription.deleted and invoice.payment_failed, then paste its signing secret here.
-          Also switch on the customer billing portal (Stripe → Settings → Billing → Customer portal) so companies can change plan and card.
-        </p>
-        <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
-          <code className="flex-1 truncate text-xs">{d.stripe_webhook_url}</code>
-          <button
-            onClick={() => navigator.clipboard.writeText(d.stripe_webhook_url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}
-            className="flex items-center gap-1 text-xs font-semibold text-brand-600"
-          >
-            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
-        {secretRow("stripe_secret_key", "Stripe secret key", "sk_live_…")}
-        {secretRow("stripe_webhook_secret", "Webhook signing secret", "whsec_…")}
-        <h2 className="flex items-center gap-3 pt-2 font-semibold text-ink-950">Your Resend (platform emails) <HelpLink to="platform-email" /></h2>
+        <h2 className="flex items-center gap-3 font-semibold text-ink-950">Your Resend (platform emails) <HelpLink to="platform-email" /></h2>
         <p className="text-sm text-gray-600">Welcome / set-password emails, and every company&apos;s emails until it adds its own key.</p>
         {secretRow("resend_api_key", "Resend API key", "re_…")}
         <button
           onClick={async () => {
-            if (await save("keys", { secrets: fields.collect(["stripe_secret_key", "stripe_webhook_secret", "resend_api_key"]) })) fields.clear();
+            if (await save("keys", { secrets: fields.collect(["resend_api_key"]) })) fields.clear();
           }}
           disabled={!!busy}
           className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"

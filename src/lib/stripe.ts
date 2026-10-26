@@ -2,14 +2,14 @@ import Stripe from "stripe";
 import { getSecret } from "@/lib/secrets";
 
 /**
- * Server-only Stripe clients. Never import into a client component.
+ * Server-only Stripe client. Never import into a client component.
  *
- *  - getStripe(companyId): the COMPANY's own Stripe account, from the key it
- *    saved in Admin → Settings → Card payments. Customers' fares go there.
- *  - getPlatformStripe(): the platform owner's Stripe account, from the master
- *    dashboard (or STRIPE_SECRET_KEY). Companies' subscriptions go there.
+ * getStripe(companyId): the COMPANY's own Stripe account, from the key it saved
+ * in Admin → Settings → Card payments. Customers' fares go there. (The
+ * platform itself has no Stripe: companies' subscriptions are billed by hand —
+ * see db/2026-10-27_manual_billing.sql.)
  *
- * Both return null when no key is set. The API version is deliberately NOT
+ * Returns null when no key is set. The API version is deliberately NOT
  * passed: stripe-node pins its own, so the wire format always matches the
  * installed SDK's typings.
  */
@@ -42,15 +42,6 @@ export async function stripeConfigured(companyId: string): Promise<boolean> {
 /** The company's webhook signing secret (its Stripe Dashboard → Webhooks). */
 export async function webhookSecret(companyId: string): Promise<string | undefined> {
   return (await getSecret(companyId, "stripe_webhook_secret")) ?? undefined;
-}
-
-export async function getPlatformStripe(): Promise<Stripe | null> {
-  const key = (await getSecret(null, "stripe_secret_key")) ?? process.env.STRIPE_SECRET_KEY ?? null;
-  return key ? client(key) : null;
-}
-
-export async function platformWebhookSecret(): Promise<string | undefined> {
-  return (await getSecret(null, "stripe_webhook_secret")) ?? process.env.STRIPE_WEBHOOK_SECRET ?? undefined;
 }
 
 /** Pence → pounds, as a 2dp number. Stripe always speaks minor units. */

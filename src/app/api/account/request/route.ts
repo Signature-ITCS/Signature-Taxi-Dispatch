@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStaffContext, audit } from "@/lib/tenant";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getPlatformStripe } from "@/lib/stripe";
 import { getServices } from "@/lib/services";
 import { notifyOwner, siteOrigin } from "@/lib/provision";
 import { rateLimit, clientIp } from "@/lib/rateLimit";
@@ -10,9 +9,8 @@ import { rateLimit, clientIp } from "@/lib/rateLimit";
  * A company asks the platform for paid help:
  *   kind "setup"   — "We'll set it up for you" (a setup package);
  *   kind "restore" — restore a backup (plans without self-service restore).
- * The request is recorded and the platform owner is emailed. If the service has
- * a price and the platform takes card payments, the admin is sent to pay; the
- * platform webhook marks it paid.
+ * The request is recorded and the platform owner is emailed; the owner sends a
+ * payment link by hand and marks the request paid in Master → Requests.
  */
 export async function POST(req: Request) {
   if (!rateLimit(`help-request:${clientIp(req)}`, 10, 60 * 60_000)) {
@@ -78,27 +76,7 @@ export async function POST(req: Request) {
     `${origin}/master/requests`
   );
 
-  // Pay now, if it has a price and the platform takes payments.
-  const stripe = price > 0 ? await getPlatformStripe() : null;
-  if (stripe) {
-    try {
-      const session = await stripe.checkout.sessions.create({
-        mode: "payment",
-        ...(ctx.company.stripe_customer_id ? { customer: ctx.company.stripe_customer_id } : { customer_email: ctx.profile.email ?? undefined }),
-        line_items: [
-          {
-            quantity: 1,
-            price_data: { currency: "gbp", unit_amount: Math.round(price * 100), product_data: { name: `${label} — ${ctx.company.name}` } },
-          },
-        ],
-        metadata: { kind, request_id: requestId, company_id: ctx.company.id },
-        success_url: `${origin}/account?requested=${kind}`,
-        cancel_url: `${origin}/account?requested=${kind}&unpaid=1`,
-      });
-      return NextResponse.json({ ok: true, url: session.url });
-    } catch (err) {
-      console.error("[help-request] checkout failed", err);
-    }
-  }
+  // Paid help is paid by hand: we send the company a payment link and mark
+  // the request paid in Master → Requests.
   return NextResponse.json({ ok: true });
 }

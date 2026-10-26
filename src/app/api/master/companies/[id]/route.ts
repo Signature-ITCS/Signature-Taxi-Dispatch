@@ -27,6 +27,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     patch.plan_id = b.plan_id;
   }
   if (typeof b.notes === "string") patch.notes = b.notes.slice(0, 4000);
+  if (typeof b.owner_phone === "string") patch.owner_phone = b.owner_phone.trim().slice(0, 30) || null;
+  if (typeof b.billing_paused === "boolean") patch.billing_paused = b.billing_paused;
 
   if (Object.keys(patch).length) {
     patch.updated_at = new Date().toISOString();

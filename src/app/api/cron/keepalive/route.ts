@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sweepRideThankYous } from "@/lib/thankYou";
 import { runNightlyBackups } from "@/lib/backups";
+import { generateInvoices } from "@/lib/billing";
+import { notifyOwner, siteOrigin } from "@/lib/provision";
 
 // Exports every company's backup — give it the longest run a plan allows.
 export const maxDuration = 60;
@@ -38,5 +40,36 @@ export async function GET(req: Request) {
     return { done: 0, failed: -1 };
   });
 
-  return NextResponse.json({ ok: true, at: new Date().toISOString(), thanked, backups });
+  // Subscription invoices due in the coming week, and a reminder to the owner
+  // of the ones still to send / overdue (Master → Billing).
+  const invoices = await billingDigest(siteOrigin(new URL(req.url).origin)).catch((err) => {
+    console.error("[keepalive] billing failed", err);
+    return { created: -1 };
+  });
+
+  return NextResponse.json({ ok: true, at: new Date().toISOString(), thanked, backups, invoices });
+}
+
+async function billingDigest(origin: string) {
+  const created = await generateInvoices(7);
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  const { data } = await createAdminClient()
+    .from("platform_invoices")
+    .select("status, due_date, amount, companies(name)")
+    .in("status", ["upcoming", "sent"]);
+  const rows = (data ?? []) as unknown as { status: string; due_date: string; amount: number; companies: { name: string } | null }[];
+  const toSend = rows.filter((r) => r.status === "upcoming");
+  const overdue = rows.filter((r) => r.due_date < today);
+  if (toSend.length || overdue.length) {
+    const list = (xs: typeof rows) => xs.map((r) => `${r.companies?.name ?? "?"} £${Number(r.amount).toFixed(2)}`).join(", ") || "none";
+    await notifyOwner(
+      `Billing: ${toSend.length} payment link${toSend.length === 1 ? "" : "s"} to send, ${overdue.length} overdue`,
+      [
+        ["To send", list(toSend)],
+        ["Overdue", list(overdue)],
+      ],
+      `${origin}/master/billing`
+    );
+  }
+  return { created, to_send: toSend.length, overdue: overdue.length };
 }

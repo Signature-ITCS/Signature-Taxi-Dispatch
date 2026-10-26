@@ -20,7 +20,7 @@ export const COMPANY_SECRETS = [
 export type CompanySecretName = (typeof COMPANY_SECRETS)[number];
 
 /** Keys the platform owner saves in the master dashboard. */
-export const PLATFORM_SECRETS = ["stripe_secret_key", "stripe_webhook_secret", "resend_api_key"] as const;
+export const PLATFORM_SECRETS = ["resend_api_key"] as const;
 export type PlatformSecretName = (typeof PLATFORM_SECRETS)[number];
 
 type CacheEntry = { v: string | null; exp: number };

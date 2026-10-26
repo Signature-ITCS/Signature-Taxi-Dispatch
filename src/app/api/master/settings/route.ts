@@ -4,18 +4,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PLATFORM_SECRETS, secretStatus, setSecret } from "@/lib/secrets";
 import { encryptionConfigured, encryptionProblem } from "@/lib/crypto";
 import { getServices } from "@/lib/services";
-import { siteOrigin } from "@/lib/provision";
 
 /**
  * Platform settings (platform owner): name, support and sender addresses, paid
- * services, and the platform's own keys (Stripe for subscriptions, Resend for
- * its emails) — keys write-only, as everywhere.
+ * services, and the platform's email key (Resend) — write-only, as everywhere.
+ * (No Stripe: companies' subscriptions are billed by hand, Master → Billing.)
  */
-export async function GET(req: Request) {
+export async function GET() {
   if (!(await getPlatformAdmin())) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 403 });
   const { data } = await createAdminClient().from("platform_settings").select("value").eq("key", "platform").maybeSingle();
   const p = (data?.value ?? {}) as Record<string, string>;
-  const origin = siteOrigin(new URL(req.url).origin);
   return NextResponse.json({
     ok: true,
     platform: { name: p.name ?? "", support_email: p.support_email ?? "", from_email: p.from_email ?? "" },
@@ -23,19 +21,12 @@ export async function GET(req: Request) {
     secrets: await secretStatus(null),
     encryption_ready: encryptionConfigured(),
     encryption_problem: encryptionProblem(),
-    env_fallbacks: {
-      stripe_secret_key: !!process.env.STRIPE_SECRET_KEY,
-      stripe_webhook_secret: !!process.env.STRIPE_WEBHOOK_SECRET,
-      resend_api_key: !!process.env.RESEND_API_KEY,
-    },
-    stripe_webhook_url: `${origin}/api/platform/stripe-webhook`,
+    env_fallbacks: { resend_api_key: !!process.env.RESEND_API_KEY },
   });
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RULES: Record<string, RegExp> = {
-  stripe_secret_key: /^(sk|rk)_(live|test)_[A-Za-z0-9]{10,}$/,
-  stripe_webhook_secret: /^whsec_[A-Za-z0-9+/=]{10,}$/,
   resend_api_key: /^re_[A-Za-z0-9_]{10,}$/,
 };
 

@@ -1,10 +1,12 @@
-import type Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { CompanyStatus } from "@/lib/tenant";
 
 /**
- * Companies' subscriptions to the platform (paid to the platform owner's
- * Stripe). Server-only.
+ * Companies' subscriptions to the platform. Server-only.
+ *
+ * Billed by hand: the platform keeps its own invoices (platform_invoices,
+ * db/2026-10-27_manual_billing.sql). The owner sends a payment link for each
+ * by email or WhatsApp and marks it sent, then paid. No card is ever saved or
+ * charged by the platform.
  */
 
 export interface Plan {
@@ -34,33 +36,54 @@ export async function listPlans(opts: { publicOnly?: boolean } = {}): Promise<Pl
   return (data ?? []) as Plan[];
 }
 
-/** Stripe's subscription status → the company's status. */
-export function statusFromStripe(s: Stripe.Subscription.Status): CompanyStatus {
-  switch (s) {
-    case "trialing":
-      return "trialing";
-    case "active":
-      return "active";
-    case "past_due":
-    case "unpaid":
-    case "incomplete":
-      return "past_due";
-    case "paused":
-      return "suspended";
-    default:
-      return "cancelled";
-  }
+/** A subscription invoice as the screens show it. */
+export type InvoiceState = "upcoming" | "sent" | "overdue" | "paid" | "cancelled";
+
+export interface PlatformInvoice {
+  id: string;
+  company_id: string;
+  number: string;
+  plan_name: string | null;
+  amount: number;
+  currency: string;
+  period_start: string;
+  period_end: string;
+  due_date: string;
+  status: "upcoming" | "sent" | "paid" | "cancelled";
+  /** status, with "overdue" for an unpaid one past its due date (UK). */
+  state: InvoiceState;
+  sent_at: string | null;
+  sent_via: string | null;
+  payment_link: string | null;
+  paid_at: string | null;
+  paid_note: string | null;
+  notes: string | null;
+  created_at: string;
 }
 
-const iso = (sec: number | null | undefined) => (sec ? new Date(sec * 1000).toISOString() : null);
+const ukToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
 
-/** The fields a subscription sets on its company row. */
-export function companyFieldsFromSubscription(sub: Stripe.Subscription) {
-  const item = sub.items?.data?.[0];
-  return {
-    status: statusFromStripe(sub.status),
-    trial_ends_at: iso(sub.trial_end),
-    current_period_end: iso(item?.current_period_end ?? null),
-    stripe_price_id: item?.price?.id ?? null,
-  };
+export function withState<T extends { status: string; due_date: string; amount: unknown }>(row: T): T & { state: InvoiceState; amount: number } {
+  const unpaid = row.status === "upcoming" || row.status === "sent";
+  const state = (unpaid && row.due_date < ukToday() ? "overdue" : row.status) as InvoiceState;
+  return { ...row, amount: Number(row.amount), state };
+}
+
+/** One company's invoices, newest first (cancelled ones left out). */
+export async function companyInvoices(companyId: string): Promise<PlatformInvoice[]> {
+  const { data } = await createAdminClient()
+    .from("platform_invoices")
+    .select("*")
+    .eq("company_id", companyId)
+    .neq("status", "cancelled")
+    .order("period_start", { ascending: false })
+    .limit(36);
+  return ((data ?? []) as PlatformInvoice[]).map(withState);
+}
+
+/** Add the invoices due within the next days (daily cron; also after changes). */
+export async function generateInvoices(daysAhead = 7): Promise<number> {
+  const { data, error } = await createAdminClient().rpc("platform_generate_invoices", { p_days_ahead: daysAhead });
+  if (error) throw new Error(error.message);
+  return Number(data) || 0;
 }

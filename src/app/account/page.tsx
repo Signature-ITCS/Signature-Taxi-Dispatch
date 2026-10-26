@@ -71,7 +71,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                 </p>
                 <p className="mt-0.5">
                   Bookings, the dispatch board and the driver app are switched off until the subscription is paid.
-                  {isAdmin ? " Use “Manage billing” below." : " Please ask your administrator."}
+                  {isAdmin ? " Pay the invoice with the link we sent you (see Invoices below)." : " Please ask your administrator."}
                   {supportEmail ? ` Questions: ${supportEmail}.` : ""}
                 </p>
               </div>
@@ -89,7 +89,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             </div>
             <div className="mt-3 space-y-1 text-sm text-gray-600">
               {c.status === "trialing" && day(c.trial_ends_at) && <p>Free trial until {day(c.trial_ends_at)}.</p>}
-              {c.status !== "trialing" && day(c.current_period_end) && <p>Next invoice on {day(c.current_period_end)}.</p>}
+              {c.status !== "trialing" && day(c.current_period_end) && <p>Paid until {day(c.current_period_end)}.</p>}
             </div>
 
             <div className="mt-6 space-y-4">
@@ -120,11 +120,10 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             </div>
           </section>
 
-          {isAdmin && c.stripe_customer_id && <Invoices />}
+          {isAdmin && <Invoices supportEmail={supportEmail} />}
 
           {isAdmin ? (
             <AccountActions
-              hasBilling={!!c.stripe_customer_id}
               supportEmail={supportEmail}
               packages={services.setup_packages}
               restorePrice={services.restore_price}

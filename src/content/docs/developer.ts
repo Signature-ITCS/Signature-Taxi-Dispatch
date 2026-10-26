@@ -13,7 +13,7 @@ export const developerPages: DocPage[] = [
         title: "What it runs on",
         body: `- **Next.js 16** app on **Vercel** (middleware is \`src/proxy.ts\`).
 - **Supabase** (Postgres, Auth, Storage, Realtime) — one project for all companies.
-- **Stripe** — companies' subscriptions (your account) and customers' fares (each company's own account).
+- **Stripe** — customers' fares, into each company's own account. Companies' subscriptions are billed by hand with payment links (Master → Billing).
 - **Resend** — email. **Cosmic SMS** — text messages. **Google Maps** — address search and routes (your key).
 - Repository: \`Signature-ITCS/Signature-Texi-Dispatch\`, \`main\` deploys automatically.`,
       },
@@ -80,7 +80,7 @@ Signing in at \`/login\` then takes you to \`/master\`.`,
 - \`CRON_SECRET\` — **secret**, any long random string (daily job).
 - \`NEXT_PUBLIC_VAPID_PUBLIC_KEY\`, \`VAPID_PRIVATE_KEY\` (**secret**), \`VAPID_SUBJECT\` — push notifications (\`npx web-push generate-vapid-keys\`).
 
-Redeploy after changing them. Everything else (Stripe, Resend) is set in the master dashboard.`,
+Redeploy after changing them. Everything else (your Resend key) is set in the master dashboard.`,
       },
     ],
   },
@@ -104,14 +104,12 @@ Redeploy after changing them. Everything else (Stripe, Resend) is set in the mas
         title: "Plans",
         body: `**Master → Plans**: name, monthly price, free-trial days, limits (drivers, office users, bookings a month — empty means unlimited), self-service backups, pricing-page feature lines, and whether the plan is public and active.
 
-After changing a price press **Sync to Stripe**: it creates the product and a new monthly price in your Stripe. A plan can only be bought on the website once synced. Existing subscribers keep their old price until moved in Stripe.`,
+A new price applies to invoices made from then on; invoices already made keep their amount (you can edit an unpaid one in **Billing**).`,
       },
       {
         id: "billing",
         title: "Billing",
-        body: `**Master → Billing** lists every company's subscription invoices from the last 13 months, live from your Stripe: company, invoice number, date, amount, **Paid / Due / Overdue**, and the due or paid date. Filter by **Unpaid**, **Overdue** or **Paid**, or search by company.
-
-At the top: **collected this month**, **waiting to be paid**, and **overdue** (amount, invoices and companies). Click a company to open it; **Stripe ↗** opens the invoice in your Stripe dashboard.`,
+        body: `**Master → Billing**: **To send**, **Waiting for payment**, **Overdue** and **Paid** invoices, with totals for each. Open an invoice to write the email or WhatsApp, mark it sent, and mark it paid. Full guide: [Billing companies](/documentation/platform-billing).`,
       },
       {
         id: "requests",
@@ -121,60 +119,49 @@ At the top: **collected this month**, **waiting to be paid**, and **overdue** (a
       {
         id: "audit",
         title: "Audit log",
-        body: `Every sensitive action: companies created or changed, keys saved (never the values), restores, plan syncs, subscription changes.`,
+        body: `Every sensitive action: companies created or changed, keys saved (never the values), restores, invoices sent and paid.`,
       },
     ],
   },
   {
-    slug: "platform-stripe",
-    title: "Your Stripe (subscriptions)",
-    summary: "Take companies' monthly payments into your own Stripe account.",
+    slug: "platform-billing",
+    title: "Billing companies (payment links)",
+    summary: "Companies' monthly subscriptions, billed by hand: send a payment link, mark it sent, mark it paid.",
     audience: "owner",
     sections: [
       {
-        id: "keys",
-        title: "1. Secret key",
-        body: `Stripe → **Developers → API keys → Secret key → Reveal**. Paste it in **Master → Platform settings → Stripe secret key** and **Save keys**.`,
-      },
-      {
-        id: "webhook",
-        title: "2. Webhook",
-        body: `1. Copy the address shown in Platform settings (\`…/api/platform/stripe-webhook\`).
-2. Stripe → **Developers → Webhooks → Add destination**. Scope **Your account**, payload **Snapshot**, API version as shown. Search and tick these six (not "Select all"), then **Continue** → **Webhook endpoint** → **Continue** → paste the address as **Endpoint URL** → **Create destination**:
-   - \`checkout.session.completed\`
-   - \`customer.subscription.created\`
-   - \`customer.subscription.updated\`
-   - \`customer.subscription.deleted\`
-   - \`invoice.paid\` — if you can't find it, tick \`invoice.payment_succeeded\` instead (either works)
-   - \`invoice.payment_failed\`
-3. Copy the endpoint's **Signing secret** (\`whsec_…\`) into **Webhook signing secret** and save.`,
-      },
-      {
-        id: "portal",
-        title: "3. Customer portal",
-        body: `Stripe → **Settings → Billing → Customer portal**: switch it on, allow **switching plans** (add your plan products), **invoice history** and **cancellation**, and switch **payment methods OFF** — companies pay each invoice by typing a card in, nothing is kept on file. This is the page companies see when they press **Manage billing**.
+        id: "how",
+        title: "How it works",
+        body: `The platform takes **no payments itself** and never stores or charges a card. It keeps a list of invoices instead:
 
-Stripe → **Settings → Billing → Subscriptions and emails**:
+1. **A week before** a company's billing date, its next invoice appears in **Master → Billing → To send** (plan, period, amount, due date). You also get a daily email listing what to send.
+2. You send them a **payment link** however you like — a Stripe Payment Link, a bank-transfer request, anything — by **email** or **WhatsApp**. On the invoice, **Write email** / **Write WhatsApp** open a ready-written message to the owner (paste the link first so it is included).
+3. Press **Mark sent (email)** or **Mark sent (WhatsApp)**. It moves to **Waiting for payment**, so you never send it twice.
+4. When the money arrives, set the date, add a note (e.g. the payment reference) and press **Mark paid**. The company is then paid up until the end of that period, and the next invoice appears a week before that.
 
-- **Manage invoices sent to customers**: switch on emailing **finalised invoices** to customers (that email has the Pay button) and the reminders.
-- **When an invoice is still unpaid after its due date**: choose **cancel the subscription** (or mark it unpaid) after the number of days you allow.
-
-!> Subscriptions are billed by **invoice** (\`collection_method: send_invoice\`): no card is saved at signup and **Stripe never charges a card automatically**. Each month the company gets an invoice by email, due in 7 days, and pays it on Stripe's page.`,
+The billing date is: the end of the free trial for a new trial company, else the day it was created (no trial), then the end of each paid month.`,
       },
       {
-        id: "plans",
-        title: "4. Sync your plans",
-        body: `**Master → Plans → Sync to Stripe** on each plan. Then the **Start free trial** buttons on the home page work.`,
+        id: "overdue",
+        title: "Overdue and unpaid",
+        body: `- An invoice not paid by its due date shows **Overdue**, and the company shows **Payment overdue** — it **keeps working**.
+- The company's admin sees it under **Plan & billing → Invoices** (with a **Pay now** button if you saved the payment link on the invoice).
+- Switching a company off is **your** decision: **Master → Companies → the company → Status → suspended**. Marking its invoice paid later makes it **Active** again.`,
       },
       {
-        id: "lifecycle",
-        title: "What happens automatically",
-        body: `- A visitor signs up for a plan with a free trial → the company and its owner login are created straight away (no card asked for) and the welcome email is sent. A plan without a trial: they pay the first invoice first, and the account is made when Stripe confirms it was paid.
-- Each month (from the end of the trial) Stripe emails the company an invoice; they pay it on Stripe's page. **No card is saved and nothing is charged automatically.**
-- Plan changed in the portal → the company's plan and limits follow.
-- Invoice not paid by its due date → company shows "Payment overdue" (still working) and you are emailed.
-- Subscription cancelled (by the company, or by Stripe after its retries — set in Stripe → Settings → Billing → Subscriptions and emails) → company is cancelled: switched off, data kept until you delete it.
-- You can always suspend or reactivate a company by hand in Master → Companies.`,
+        id: "changes",
+        title: "Changing amounts, cancelling, free months",
+        body: `- **Amount**: change it on the invoice before it is paid (e.g. a discount). New invoices use the plan's price at the time they are made.
+- **Plan change**: change the plan in **Master → Companies**; the next invoice uses the new plan.
+- **Cancel invoice**: removes it, and a fresh one for the same period is made at the plan's current price (use it after changing plan).
+- **Free month**: mark the invoice paid with a note such as "free month".
+- **Never bill a company** (free, or billed another way): tick **Don't make invoices for this company** on it.
+- **Mistakes**: **Not sent after all** and **Undo paid** put an invoice back.`,
+      },
+      {
+        id: "phone",
+        title: "Owners' WhatsApp numbers",
+        body: `The sign-up form asks for a mobile / WhatsApp number. For companies you create yourself, or to correct it, edit **Owner's mobile / WhatsApp** in **Master → Companies → the company**.`,
       },
     ],
   },
@@ -222,15 +209,13 @@ Stripe → **Settings → Billing → Subscriptions and emails**:
       {
         id: "logs",
         title: "Where to look",
-        body: `- **Vercel → Project → Logs** — server errors (search for \`[checkout]\`, \`[stripe-webhook]\`, \`[platform-webhook]\`, \`[email]\`, \`[backups]\`).
-- **Stripe → Developers → Webhooks → an endpoint** — failed deliveries and their responses.
+        body: `- **Vercel → Project → Logs** — server errors (search for \`[checkout]\`, \`[stripe-webhook]\` (companies' card payments), \`[email]\`, \`[backups]\`, \`[keepalive]\`).
 - **Master → Audit log** — what changed and who changed it.`,
       },
       {
         id: "common",
         title: "Common problems",
-        body: `- **"Sign-ups are not open yet"** — your Stripe key isn't saved, or the plan isn't synced to Stripe.
-- **Paid signup but no account** — you get an email; check the platform webhook's signing secret, then create the company by hand in Master → Companies.
+        body: `- **A company has no invoice in Billing** — its billing date is more than a week away, billing is paused for it, its plan costs £0, or it is suspended or cancelled.
 - **Keys can't be saved** — \`SECRETS_ENCRYPTION_KEY\` missing in Vercel (redeploy after adding).
 - **No welcome emails** — Resend key or "send from" address missing or not on a verified domain.
 - **Address search fails** — Google key restricted to websites, or Places API (New)/Routes API not enabled.`,

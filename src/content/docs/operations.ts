@@ -174,23 +174,16 @@ At a limit, adding more is refused with an upgrade message. Bookings count per c
       {
         id: "manage",
         title: "Pay invoices, change plan or cancel",
-        body: `**How you pay:** every month (from the end of your free trial) you get an **invoice by email**. Press **Pay** in it and type your card in on Stripe's secure page. Your card is **never saved and never charged automatically** — nothing is taken unless you pay an invoice yourself. Each invoice is due 7 days after it is sent.
+        body: `**How you pay:** a few days before each billing date (the end of your free trial, then every month) we send you a **payment link by email or WhatsApp**. Pay it there. Your card is **never saved and never charged automatically** — nothing is taken unless you pay a link yourself.
 
-**Admin → Plan & billing → Invoices** lists all your invoices: amount, **Paid / Due / Overdue**, the due date or the day you paid, a **Pay now** button on any unpaid one, and a **PDF** of each.
+**Admin → Plan & billing → Invoices** lists your invoices: period, amount, **Upcoming / Payment link sent / Overdue / Paid**, the due date or the day you paid, and a **Pay now** button when the link is there.
 
-Press **Manage billing** to open Stripe's secure page where you can:
-
-- see and pay open invoices,
-- switch to another plan,
-- download invoices and receipts,
-- cancel.
-
-Changes apply straight away.`,
+**Change plan or cancel:** email us (the address is on the Plan & billing page) and we'll change it for you.`,
       },
       {
         id: "unpaid",
         title: "If an invoice isn't paid",
-        body: `After the due date your account keeps working for a while and shows **Payment overdue**. Pay the invoice from the email or from **Manage billing**. If the subscription ends unpaid, the account is **switched off**: the booking page, dispatch board and driver app stop — your data is kept, and everything comes back when you subscribe again.`,
+        body: `After the due date your account keeps working for a while and shows **Payment overdue**. Pay with the link we sent you (also under **Invoices**). If it stays unpaid we may **switch the account off**: the booking page, dispatch board and driver app stop — your data is kept, and everything comes back once it is paid.`,
       },
     ],
   },

@@ -98,12 +98,14 @@ export interface ProvisionInput {
   companyName: string;
   ownerName: string;
   ownerEmail: string;
+  /** Mobile / WhatsApp number, for sending payment links. */
+  ownerPhone?: string | null;
   planId: string;
   status: CompanyStatus;
   trialEndsAt?: string | null;
   currentPeriodEnd?: string | null;
-  stripeCustomerId?: string | null;
-  stripeSubscriptionId?: string | null;
+  /** Where it came from: the public sign-up page or the master dashboard. */
+  via?: "signup" | "master";
   origin: string;
   actor?: { id: string | null; email: string | null };
 }
@@ -115,23 +117,14 @@ export type ProvisionResult =
 /**
  * Create a company, its starting data and its owner's admin login, then email
  * the owner a link to choose a password. If anything fails, what was created is
- * removed again. Safe to call twice for the same Stripe subscription (the
- * second call finds the company and does nothing).
+ * removed again. Its first invoice is added straight away when it is due within
+ * a week (see db/2026-10-27_manual_billing.sql).
  */
 export async function provisionCompany(p: ProvisionInput): Promise<ProvisionResult> {
   const admin = createAdminClient();
   const email = p.ownerEmail.trim().toLowerCase();
   const name = p.companyName.trim().slice(0, 120);
   if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "invalid_details" };
-
-  if (p.stripeSubscriptionId) {
-    const { data: existing } = await admin
-      .from("companies")
-      .select("id, slug")
-      .eq("stripe_subscription_id", p.stripeSubscriptionId)
-      .maybeSingle();
-    if (existing) return { ok: true, companyId: existing.id as string, slug: existing.slug as string, emailed: false };
-  }
 
   const { data: plan } = await admin.from("plans").select("id, name").eq("id", p.planId).maybeSingle();
   if (!plan) return { ok: false, error: "unknown_plan" };
@@ -149,10 +142,9 @@ export async function provisionCompany(p: ProvisionInput): Promise<ProvisionResu
       status: p.status,
       plan_id: plan.id,
       owner_email: email,
+      owner_phone: p.ownerPhone?.trim() || null,
       trial_ends_at: p.trialEndsAt ?? null,
       current_period_end: p.currentPeriodEnd ?? null,
-      stripe_customer_id: p.stripeCustomerId ?? null,
-      stripe_subscription_id: p.stripeSubscriptionId ?? null,
     })
     .select("id")
     .single();
@@ -226,16 +218,20 @@ export async function provisionCompany(p: ProvisionInput): Promise<ProvisionResu
     actorId: p.actor?.id ?? null,
     actorEmail: p.actor?.email ?? email,
     companyId,
-    detail: { name, slug, plan: plan.name, status: p.status, via: p.stripeSubscriptionId ? "signup" : "master" },
+    detail: { name, slug, plan: plan.name, status: p.status, via: p.via ?? "master" },
   });
+  // Its first invoice, if due within a week (no trial) — so it shows in Master → Billing now.
+  const { error: genErr } = await admin.rpc("platform_generate_invoices", { p_days_ahead: 7 });
+  if (genErr) console.error("[provision] invoice generation failed", genErr.message);
   await notifyOwner(
     `New company: ${name}`,
     [
       ["Company", name],
-      ["Owner", `${p.ownerName} <${email}>`],
+      ["Owner", `${p.ownerName} <${email}>${p.ownerPhone ? ` · ${p.ownerPhone}` : ""}`],
       ["Plan", String(plan.name)],
       ["Status", p.status],
       ["Company address", `${p.origin}/${slug}`],
+      ["Billing", p.status === "trialing" && p.trialEndsAt ? `Free trial until ${new Date(p.trialEndsAt).toLocaleDateString("en-GB")} — the first invoice appears in Master → Billing a week before` : "First invoice is in Master → Billing — send them the payment link"],
     ],
     `${p.origin}/master/companies`
   );

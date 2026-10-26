@@ -2,7 +2,7 @@
 
 import HelpLink from "@/components/docs/HelpLink";
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Plus, RefreshCw, Check } from "lucide-react";
+import { Loader2, Plus, Check } from "lucide-react";
 
 interface Plan {
   id: string;
@@ -19,18 +19,15 @@ interface Plan {
   is_public: boolean;
   is_active: boolean;
   sort_order: number;
-  stripe_price_id: string | null;
 }
 
 const ERRORS: Record<string, string> = {
-  stripe_not_configured: "Add your Stripe secret key in Platform settings first.",
-  stripe_error: "Stripe refused it — check the key in Platform settings.",
   code_in_use: "Another plan already uses that code.",
   invalid_code: "Code: 2–30 lowercase letters, digits or dashes.",
   invalid_price: "Enter a valid monthly price.",
 };
 
-/** Subscription plans: prices, limits, features — and syncing them to Stripe. */
+/** Subscription plans: prices, limits and features. Invoices use the plan's price (Master → Billing). */
 export default function PlansPage() {
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -58,7 +55,7 @@ export default function PlansPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-3 font-display text-2xl font-bold text-ink-950">Plans <HelpLink to="master-dashboard#plans" /></h1>
-          <p className="text-sm text-gray-500">Limits apply instantly. A plan is sold on the website once it is public, active and synced to Stripe.</p>
+          <p className="text-sm text-gray-500">Limits apply instantly. A plan is offered on the website when it is public and active. Companies are invoiced at its monthly price.</p>
         </div>
         <button onClick={addPlan} className="flex items-center gap-1 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white">
           <Plus className="h-4 w-4" /> Add plan
@@ -136,9 +133,6 @@ function PlanCard({ plan, onChanged, setMsg }: { plan: Plan; onChanged: () => vo
         <label className="flex items-center gap-2"><input type="checkbox" checked={p.is_public} onChange={(e) => setP({ ...p, is_public: e.target.checked })} /> On the pricing page</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={p.is_active} onChange={(e) => setP({ ...p, is_active: e.target.checked })} /> Active</label>
       </div>
-      <p className="text-xs text-gray-500">
-        Stripe: {plan.stripe_price_id ? <span className="font-mono">{plan.stripe_price_id}</span> : "not synced — can't be bought on the website yet"}
-      </p>
       <div className="flex gap-2">
         <button
           onClick={() =>
@@ -146,19 +140,12 @@ function PlanCard({ plan, onChanged, setMsg }: { plan: Plan; onChanged: () => vo
               name: p.name, code: p.code, description: p.description, price_monthly: p.price_monthly, trial_days: p.trial_days,
               max_drivers: p.max_drivers, max_staff: p.max_staff, max_bookings_month: p.max_bookings_month,
               features: p.features, backups_included: p.backups_included, is_public: p.is_public, is_active: p.is_active,
-            }, "Plan saved. Sync to Stripe if you changed the price.")
+            }, "Plan saved. A new price applies to invoices made from now on.")
           }
           disabled={!!busy}
           className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
         >
           {busy === "save" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Save
-        </button>
-        <button
-          onClick={() => send("sync", { sync: true }, "Synced to Stripe.")}
-          disabled={!!busy}
-          className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-ink-950 disabled:opacity-60"
-        >
-          {busy === "sync" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Sync to Stripe
         </button>
       </div>
     </div>

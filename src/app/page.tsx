@@ -39,7 +39,7 @@ const FAQ: [string, string][] = [
   ["Do I need any technical knowledge?", "No. Sign up, choose your password and follow the setup checklist. If you'd rather not, we can set up payments, SMS and email for you."],
   ["Whose Stripe account do card payments go to?", "Yours. You connect your own Stripe account in Settings, so fares are paid straight to you."],
   ["Can I use my own domain and colours?", "Yes. Upload your logo, choose your colours, and your booking page, apps, emails and receipts all carry your brand."],
-  ["What happens after the free trial?", "You get an invoice by email each month and pay it with your card on Stripe's secure page. We never save your card or charge it automatically. Change plan or cancel any time from Plan & billing."],
+  ["How do I pay for my plan?", "Each month we send you a payment link by email or WhatsApp, and you pay it there. We never save your card or charge it automatically. To change plan or cancel, just get in touch."],
   ["Is my data backed up?", "Every night, on every plan. Pro and Business can download and restore backups themselves; on Starter we restore for you on request."],
   ["Can I change plan later?", "Yes — upgrade or downgrade any time. If you reach your plan's driver, staff or booking limit, you'll be asked to upgrade."],
 ];

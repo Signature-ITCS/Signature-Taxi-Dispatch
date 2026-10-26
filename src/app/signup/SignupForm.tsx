@@ -17,8 +17,8 @@ const ERRORS: Record<string, string> = {
   unknown_plan: "Choose a plan.",
   signups_closed: "Sign-ups are not open yet. Please get in touch with us.",
   rate_limited: "Too many attempts. Try again in a little while.",
+  invalid_phone: "Enter a valid mobile / WhatsApp number — we send your invoices there.",
   create_failed: "We couldn't create your account. Please try again, or get in touch with us.",
-  payment_provider_error: "Our payment provider didn't respond. Please try again in a minute.",
 };
 
 export default function SignupForm({
@@ -34,6 +34,7 @@ export default function SignupForm({
   const [company, setCompany] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const chosen = plans.find((p) => p.code === plan);
@@ -48,7 +49,7 @@ export default function SignupForm({
     const res = await fetch("/api/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan, company_name: company, full_name: name, email }),
+      body: JSON.stringify({ plan, company_name: company, full_name: name, email, phone }),
     }).catch(() => null);
     const data = res ? await res.json().catch(() => null) : null;
     if (data?.ok && data.url) {
@@ -102,18 +103,22 @@ export default function SignupForm({
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="sam@citycars.co.uk" autoComplete="email"
           className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 outline-none focus:border-brand-500" />
       </label>
+      <label className="block text-sm">
+        <span className="font-medium text-gray-700">Mobile / WhatsApp</span>
+        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+44 7700 900123" autoComplete="tel"
+          className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 outline-none focus:border-brand-500" />
+      </label>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button disabled={busy}
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white disabled:opacity-60">
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}{" "}
-        {chosen && chosen.trialDays > 0 ? "Start free trial" : "Continue to secure payment"}
+        {chosen && chosen.trialDays > 0 ? "Start free trial" : "Create my account"}
       </button>
       <p className="text-center text-xs text-gray-400">
-        {chosen && chosen.trialDays > 0
-          ? "No card needed. Your login details arrive by email straight away."
-          : "Pay the first month on Stripe's secure page. Your login details arrive by email straight after."}{" "}
-        We never save your card or charge it automatically — each month you get an invoice by email and pay it yourself.
+        No card needed — your login details arrive by email straight away.{" "}
+        {chosen && chosen.trialDays > 0 ? "Before your trial ends" : "Each month"} we send you a payment link by email or WhatsApp;
+        we never save your card or charge it automatically.
       </p>
       <p className="text-center text-sm">
         <Link href="/login" className="text-gray-500 hover:text-ink-950">Already have an account? Sign in</Link>

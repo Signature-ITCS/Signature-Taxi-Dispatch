@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import HelpLink from "@/components/docs/HelpLink";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -26,7 +27,8 @@ interface Company {
   owner_email: string | null;
   trial_ends_at: string | null;
   current_period_end: string | null;
-  stripe_customer_id: string | null;
+  owner_phone: string | null;
+  billing_paused: boolean;
   custom_domain: string | null;
   notes: string | null;
   created_at: string;
@@ -172,7 +174,7 @@ function Input({ label, value, onChange, placeholder, type = "text" }: { label: 
 }
 
 function CreateCompany({ plans, onClose, onDone }: { plans: Plan[]; onClose: () => void; onDone: () => void }) {
-  const [f, setF] = useState({ company_name: "", owner_name: "", owner_email: "", plan_id: plans[0]?.id ?? "", status: "active", trial_days: "14" });
+  const [f, setF] = useState({ company_name: "", owner_name: "", owner_email: "", owner_phone: "", plan_id: plans[0]?.id ?? "", status: "active", trial_days: "14" });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const submit = async () => {
@@ -195,6 +197,7 @@ function CreateCompany({ plans, onClose, onDone }: { plans: Plan[]; onClose: () 
         <Input label="Company name" value={f.company_name} onChange={(v) => setF({ ...f, company_name: v })} placeholder="City Cars Ltd" />
         <Input label="Owner's name" value={f.owner_name} onChange={(v) => setF({ ...f, owner_name: v })} />
         <Input label="Owner's email (their login)" type="email" value={f.owner_email} onChange={(v) => setF({ ...f, owner_email: v })} />
+        <Input label="Owner's mobile / WhatsApp (for payment links)" value={f.owner_phone} onChange={(v) => setF({ ...f, owner_phone: v })} placeholder="+44 7…" />
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-sm">
             <span className="font-medium text-gray-700">Plan</span>
@@ -205,7 +208,7 @@ function CreateCompany({ plans, onClose, onDone }: { plans: Plan[]; onClose: () 
           <label className="block text-sm">
             <span className="font-medium text-gray-700">Start as</span>
             <select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2">
-              <option value="active">Active (billed outside the website)</option>
+              <option value="active">Active (first invoice straight away)</option>
               <option value="trialing">Free trial</option>
             </select>
           </label>
@@ -230,6 +233,8 @@ function CompanyPanel({ company: c, plans, onClose, onChanged }: { company: Comp
   const [status, setStatus] = useState(c.status);
   const [planId, setPlanId] = useState(c.plan_id ?? "");
   const [notes, setNotes] = useState(c.notes ?? "");
+  const [phone, setPhone] = useState(c.owner_phone ?? "");
+  const [paused, setPaused] = useState(!!c.billing_paused);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [backups, setBackups] = useState<BackupRow[] | null>(null);
@@ -273,7 +278,7 @@ function CompanyPanel({ company: c, plans, onClose, onChanged }: { company: Comp
           </a>
           <span>Owner: {c.owner_email}</span>
           <span>Since {new Date(c.created_at).toLocaleDateString("en-GB")}</span>
-          {c.stripe_customer_id ? <span>Billed through Stripe</span> : <span>Billed outside the website</span>}
+          <Link href="/master/billing" className="text-brand-600">Invoices →</Link>
         </div>
 
         {msg && <p className={`rounded-xl p-3 ${msg.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{msg.text}</p>}
@@ -292,17 +297,27 @@ function CompanyPanel({ company: c, plans, onClose, onChanged }: { company: Comp
             </select>
           </label>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="font-medium text-gray-700">Owner&apos;s mobile / WhatsApp</span>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+44 7…" className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2" />
+          </label>
+          <label className="flex items-end gap-2 pb-2">
+            <input type="checkbox" checked={paused} onChange={(e) => setPaused(e.target.checked)} className="h-4 w-4 accent-brand-600" />
+            <span className="text-gray-700">Don&apos;t make invoices for this company (free, or billed some other way)</span>
+          </label>
+        </div>
         <label className="block">
           <span className="font-medium text-gray-700">Notes (only you see these)</span>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1 w-full rounded-xl border border-gray-200 p-2" />
         </label>
         <p className="text-xs text-gray-500">
-          Suspending switches off its booking page, dispatch board and driver app at once. Its data is kept. Plan and status
-          changes made in Stripe (billing portal, failed payments) also update here automatically.
+          Suspending switches off its booking page, dispatch board and driver app at once. Its data is kept. A company with an
+          invoice past its due date shows Payment overdue by itself; marking the invoice paid in Billing makes it Active again.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => call("save", "PATCH", `/api/master/companies/${c.id}`, { status, plan_id: planId, notes }, "Saved.")}
+            onClick={() => call("save", "PATCH", `/api/master/companies/${c.id}`, { status, plan_id: planId, notes, owner_phone: phone, billing_paused: paused }, "Saved.")}
             disabled={!!busy}
             className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 font-semibold text-white disabled:opacity-60"
           >

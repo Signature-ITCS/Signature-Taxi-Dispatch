@@ -5,9 +5,8 @@ import { useState } from "react";
 import { CreditCard, LifeBuoy, History, Loader2, CheckCircle2 } from "lucide-react";
 import type { SetupPackage } from "@/lib/services";
 
-/** Billing portal, "We'll set it up for you", and (plans without it) a paid restore. */
+/** Billing (by payment link), "We'll set it up for you", and (plans without it) a paid restore. */
 export default function AccountActions({
-  hasBilling,
   supportEmail,
   packages,
   restorePrice,
@@ -15,7 +14,6 @@ export default function AccountActions({
   requested,
   unpaid,
 }: {
-  hasBilling: boolean;
   supportEmail: string;
   packages: SetupPackage[];
   restorePrice: number;
@@ -38,10 +36,6 @@ export default function AccountActions({
       body: JSON.stringify(body ?? {}),
     }).catch(() => null);
     const data = res ? await res.json().catch(() => null) : null;
-    if (data?.ok && data.url) {
-      window.location.href = data.url;
-      return;
-    }
     setBusy(null);
     if (data?.ok) setSent(key.startsWith("setup") ? "setup" : "restore");
     else setError("That didn't work. Please try again" + (supportEmail ? `, or email ${supportEmail}.` : "."));
@@ -52,31 +46,20 @@ export default function AccountActions({
       {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       {sent && (
         <p className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">
-          <CheckCircle2 className="h-4 w-4" /> Request received — we&apos;ll be in touch by email.
+          <CheckCircle2 className="h-4 w-4" /> Request received — we&apos;ll be in touch by email or WhatsApp.
         </p>
       )}
       {unpaid && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Your request is saved but not paid yet — we&apos;ll contact you.</p>}
 
       <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
         <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink-950">
-          <CreditCard className="h-5 w-5 text-brand-600" /> Billing <span className="ml-auto"><HelpLink to="plan-billing#manage" /></span>
+          <CreditCard className="h-5 w-5 text-brand-600" /> Plan changes <span className="ml-auto"><HelpLink to="plan-billing#manage" /></span>
         </h2>
-        {hasBilling ? (
-          <>
-            <p className="mt-1 text-sm text-gray-600">Pay invoices, change plan, download receipts or cancel — on Stripe&apos;s secure page. Your card is never saved or charged automatically.</p>
-            <button
-              onClick={() => go("portal", "/api/account/portal")}
-              disabled={!!busy}
-              className="mt-4 flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              {busy === "portal" && <Loader2 className="h-4 w-4 animate-spin" />} Manage billing
-            </button>
-          </>
-        ) : (
-          <p className="mt-1 text-sm text-gray-600">
-            Your plan is managed by us. To change it, {supportEmail ? <>email <a className="text-brand-600" href={`mailto:${supportEmail}`}>{supportEmail}</a></> : "contact us"}.
-          </p>
-        )}
+        <p className="mt-1 text-sm text-gray-600">
+          We send you a payment link for each invoice by email or WhatsApp — your card is never saved or charged
+          automatically. To change your plan or cancel,{" "}
+          {supportEmail ? <>email <a className="text-brand-600" href={`mailto:${supportEmail}`}>{supportEmail}</a></> : "contact us"}.
+        </p>
       </section>
 
       <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -106,7 +89,7 @@ export default function AccountActions({
                 disabled={!!busy}
                 className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-gray-200 py-2 text-sm font-semibold text-ink-950 hover:border-brand-500 disabled:opacity-60"
               >
-                {busy === `setup-${p.code}` && <Loader2 className="h-4 w-4 animate-spin" />} {p.price > 0 ? "Choose and pay" : "Request"}
+                {busy === `setup-${p.code}` && <Loader2 className="h-4 w-4 animate-spin" />} Request
               </button>
             </div>
           ))}
