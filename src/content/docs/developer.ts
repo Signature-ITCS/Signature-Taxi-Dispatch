@@ -95,6 +95,7 @@ Redeploy after changing them. Everything else (your Resend key) is set in the ma
         title: "Companies",
         body: `**Master → Companies**
 
+- **New sign-ups wait for you**: they show as **pending approval** at the top (you are also emailed). Nothing works for them and they get no email until you open the company and press **Approve** — that starts their free trial (if the plan has one, otherwise their first invoice goes to Billing) and emails them a link to choose their password. **Reject** deletes the sign-up.
 - **Create company** — company name, owner's name and email, plan, and start **Active** (billed outside the website) or on a **Free trial**. The owner is emailed a "choose your password" link.
 - Open a company to change its **status** (suspend switches everything off at once, data kept), **plan** and **notes**, **re-send the welcome email**, take a **backup**, **restore** one, or **delete** the company (type its name; cannot be undone).
 - Each company's addresses: \`/<company>\`, \`/<company>/login\`, \`/<company>/driver\`.`,

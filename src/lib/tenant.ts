@@ -12,7 +12,7 @@ import type { Profile } from "@/lib/types";
  * browser.
  */
 
-export type CompanyStatus = "trialing" | "active" | "past_due" | "suspended" | "cancelled";
+export type CompanyStatus = "pending" | "trialing" | "active" | "past_due" | "suspended" | "cancelled";
 
 export interface Company {
   id: string;

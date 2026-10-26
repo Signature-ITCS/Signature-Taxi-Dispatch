@@ -106,6 +106,9 @@ export interface ProvisionInput {
   currentPeriodEnd?: string | null;
   /** Where it came from: the public sign-up page or the master dashboard. */
   via?: "signup" | "master";
+  /** Email the owner their "choose your password" link now (default). Sign-ups
+   *  wait as "pending" and get it when the platform owner approves them. */
+  sendWelcome?: boolean;
   origin: string;
   actor?: { id: string | null; email: string | null };
 }
@@ -204,7 +207,7 @@ export async function provisionCompany(p: ProvisionInput): Promise<ProvisionResu
     .eq("company_id", companyId)
     .eq("key", "notifications");
 
-  const emailed = await sendPasswordLink({
+  const emailed = p.sendWelcome === false ? false : await sendPasswordLink({
     email,
     fullName: p.ownerName,
     companyName: name,
@@ -224,14 +227,18 @@ export async function provisionCompany(p: ProvisionInput): Promise<ProvisionResu
   const { error: genErr } = await admin.rpc("platform_generate_invoices", { p_days_ahead: 7 });
   if (genErr) console.error("[provision] invoice generation failed", genErr.message);
   await notifyOwner(
-    `New company: ${name}`,
+    p.status === "pending" ? `New sign-up waiting for your approval: ${name}` : `New company: ${name}`,
     [
       ["Company", name],
       ["Owner", `${p.ownerName} <${email}>${p.ownerPhone ? ` · ${p.ownerPhone}` : ""}`],
       ["Plan", String(plan.name)],
       ["Status", p.status],
       ["Company address", `${p.origin}/${slug}`],
-      ["Billing", p.status === "trialing" && p.trialEndsAt ? `Free trial until ${new Date(p.trialEndsAt).toLocaleDateString("en-GB")} — the first invoice appears in Master → Billing a week before` : "First invoice is in Master → Billing — send them the payment link"],
+      ["Next step", p.status === "pending"
+        ? "Approve or reject it in Master → Companies. Nothing works and no email goes to them until you approve."
+        : p.status === "trialing" && p.trialEndsAt
+          ? `Free trial until ${new Date(p.trialEndsAt).toLocaleDateString("en-GB")} — the first invoice appears in Master → Billing a week before`
+          : "First invoice is in Master → Billing — send them the payment link"],
     ],
     `${p.origin}/master/companies`
   );

@@ -37,6 +37,7 @@ interface Company {
 }
 
 const STATUS_TONE: Record<string, string> = {
+  pending: "bg-orange-100 text-orange-800",
   trialing: "bg-brand-50 text-brand-700",
   active: "bg-emerald-50 text-emerald-700",
   past_due: "bg-amber-50 text-amber-800",
@@ -49,7 +50,10 @@ const ERRORS: Record<string, string> = {
   unknown_plan: "Choose a plan.",
   confirm_mismatch: "Type the company name exactly to confirm.",
   no_owner_login: "The owner has no login to send it to.",
+  not_pending: "This company was already approved.",
+  not_approved: "Approve the company first — that sends the welcome email.",
 };
+const STATUS_LABEL: Record<string, string> = { pending: "pending approval" };
 
 export default function CompaniesPage() {
   return (
@@ -82,9 +86,11 @@ function Companies() {
     load();
   }, [load]);
 
-  const shown = (companies ?? []).filter((c) =>
-    [c.name, c.slug, c.owner_email ?? ""].some((x) => x.toLowerCase().includes(q.trim().toLowerCase()))
-  );
+  const shown = (companies ?? [])
+    .filter((c) => [c.name, c.slug, c.owner_email ?? ""].some((x) => x.toLowerCase().includes(q.trim().toLowerCase())))
+    // Sign-ups waiting for approval first.
+    .sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending"));
+  const pending = (companies ?? []).filter((c) => c.status === "pending");
 
   return (
     <div className="space-y-5">
@@ -98,6 +104,11 @@ function Companies() {
         </div>
       </div>
 
+      {pending.length > 0 && (
+        <p className="rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900">
+          <strong>{pending.length} sign-up{pending.length === 1 ? "" : "s"} waiting for your approval</strong> — open {pending.length === 1 ? "it" : "each one"} below and press Approve or Reject.
+        </p>
+      )}
       {!companies ? (
         <Loader2 className="h-6 w-6 animate-spin text-brand-500" />
       ) : (
@@ -127,7 +138,7 @@ function Companies() {
                   </td>
                   <td className="px-4 py-3">{c.plans?.name ?? "—"}</td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_TONE[c.status] ?? ""}`}>{c.status}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_TONE[c.status] ?? ""}`}>{STATUS_LABEL[c.status] ?? c.status}</span>
                   </td>
                   <td className="px-4 py-3">{fmt(c.usage?.drivers, c.usage?.max_drivers)}</td>
                   <td className="px-4 py-3">{fmt(c.usage?.staff, c.usage?.max_staff)}</td>
@@ -283,11 +294,41 @@ function CompanyPanel({ company: c, plans, onClose, onChanged }: { company: Comp
 
         {msg && <p className={`rounded-xl p-3 ${msg.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{msg.text}</p>}
 
+        {c.status === "pending" && (
+          <div className="space-y-3 rounded-2xl border border-orange-200 bg-orange-50 p-4">
+            <p className="font-semibold text-orange-900">Waiting for your approval</p>
+            <p className="text-orange-900">
+              Signed up {new Date(c.created_at).toLocaleString("en-GB")} on the {c.plans?.name ?? "—"} plan · {c.owner_email}
+              {c.owner_phone ? ` · ${c.owner_phone}` : ""}. Nothing works for them yet and they have had no email.
+              Approving starts their free trial (if the plan has one) and emails them a link to choose their password.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => call("approve", "PATCH", `/api/master/companies/${c.id}`, { approve: true }, "Approved — the owner has been emailed a link to sign in.")}
+                disabled={!!busy}
+                className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-60"
+              >
+                {busy === "approve" && <Loader2 className="h-4 w-4 animate-spin" />} Approve
+              </button>
+              <button
+                onClick={async () => {
+                  if (!window.confirm(`Reject and delete the sign-up "${c.name}"? They are not emailed.`)) return;
+                  if (await call("reject", "PATCH", `/api/master/companies/${c.id}`, { reject: true }, "Rejected and removed.")) onClose();
+                }}
+                disabled={!!busy}
+                className="rounded-xl border border-orange-300 bg-white px-4 py-2 font-semibold text-orange-900 disabled:opacity-60"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="font-medium text-gray-700">Status</span>
             <select value={status} onChange={(e) => setStatus(e.target.value)} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2">
-              {["trialing", "active", "past_due", "suspended", "cancelled"].map((s) => <option key={s} value={s}>{s}</option>)}
+              {["pending", "trialing", "active", "past_due", "suspended", "cancelled"].map((s) => <option key={s} value={s}>{STATUS_LABEL[s] ?? s}</option>)}
             </select>
           </label>
           <label className="block">

@@ -11,7 +11,8 @@
 --     app's server reads or writes it (no access rules for any login).
 --   • companies.billing_paused — "don't create invoices for this company"
 --     (billed some other way, or free); companies.owner_phone — for sending
---     payment links by WhatsApp.
+--     payment links by WhatsApp; company status "pending" — a sign-up waiting
+--     for the owner's approval.
 --   • platform_generate_invoices(days_ahead) — called daily: adds the next
 --     invoice for every open company whose billing date is within days_ahead,
 --     and marks companies with an unpaid invoice past its due date "overdue".
@@ -32,6 +33,12 @@ begin;
 alter table public.companies add column if not exists billing_paused boolean not null default false;
 -- Where to send payment links by WhatsApp (asked for at sign-up).
 alter table public.companies add column if not exists owner_phone text;
+
+-- Sign-ups wait for the owner's approval: status "pending" (switched off like
+-- suspended — no booking page, no logins working, no invoices) until approved.
+alter table public.companies drop constraint if exists companies_status_check;
+alter table public.companies add constraint companies_status_check
+  check (status in ('pending', 'trialing', 'active', 'past_due', 'suspended', 'cancelled'));
 
 create sequence if not exists public.platform_invoice_seq;
 

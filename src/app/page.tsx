@@ -147,7 +147,7 @@ export default async function Home() {
           <h2 className="text-center font-display text-3xl font-bold">Up and running today</h2>
           <div className="mt-10 grid gap-6 md:grid-cols-3">
             {[
-              ["1", "Choose a plan", "Start your free trial — no card needed."],
+              ["1", "Choose a plan", "Sign up — no card needed. We approve your account and email you a sign-in link."],
               ["2", "Set your password", "Your login arrives by email. Add your logo, prices and drivers."],
               ["3", "Take bookings", "Share your booking page or add the widget to your website."],
             ].map(([n, t, d]) => (

@@ -12,6 +12,7 @@ import Invoices from "./Invoices";
 export const metadata = { title: "Plan & billing" };
 
 const STATUS: Record<string, { label: string; tone: string }> = {
+  pending: { label: "Waiting for approval", tone: "bg-orange-50 text-orange-800" },
   trialing: { label: "Free trial", tone: "bg-brand-50 text-brand-700" },
   active: { label: "Active", tone: "bg-emerald-50 text-emerald-700" },
   past_due: { label: "Payment overdue", tone: "bg-amber-50 text-amber-800" },

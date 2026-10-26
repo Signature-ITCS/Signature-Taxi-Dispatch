@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Loader2, Lock } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 interface PlanOption {
   code: string;
@@ -112,13 +112,12 @@ export default function SignupForm({
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button disabled={busy}
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white disabled:opacity-60">
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}{" "}
-        {chosen && chosen.trialDays > 0 ? "Start free trial" : "Create my account"}
+        {busy && <Loader2 className="h-4 w-4 animate-spin" />}{" "}
+        Create my account
       </button>
       <p className="text-center text-xs text-gray-400">
-        No card needed — your login details arrive by email straight away.{" "}
-        {chosen && chosen.trialDays > 0 ? "Before your trial ends" : "Each month"} we send you a payment link by email or WhatsApp;
-        we never save your card or charge it automatically.
+        No payment now. We check every new account and email you a link to sign in once it&apos;s approved
+        {chosen && chosen.trialDays > 0 ? " — your free trial starts then" : ""}. Later we send you a payment link each month by email or WhatsApp.
       </p>
       <p className="text-center text-sm">
         <Link href="/login" className="text-gray-500 hover:text-ink-950">Already have an account? Sign in</Link>

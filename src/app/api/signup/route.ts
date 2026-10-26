@@ -5,14 +5,11 @@ import { siteOrigin, isOwnerEmail, provisionCompany } from "@/lib/provision";
 import { isValidPhone } from "@/lib/format";
 
 /**
- * A new company signs up. No payment is taken here: the account is made
- * straight away and subscriptions are billed by hand — the platform owner sends
- * a payment link for each invoice (Master → Billing) by email or WhatsApp.
- *
- *  - Plan with a free trial: the company starts on the trial; its first
- *    invoice appears in Master → Billing a week before the trial ends.
- *  - Plan without a trial: the company starts active and its first invoice
- *    appears in Master → Billing at once.
+ * A new company signs up. No payment is taken: the company is saved as
+ * "pending" (switched off) and the platform owner is emailed to approve it in
+ * Master → Companies. Approving starts its free trial (or makes it active) and
+ * emails the owner their "choose your password" link. Subscriptions are then
+ * billed by hand with payment links (Master → Billing).
  */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -44,7 +41,6 @@ export async function POST(req: Request) {
   const { data: inUse } = await admin.from("profiles").select("id").eq("email", email).maybeSingle();
   if (inUse || (await isOwnerEmail(email))) return NextResponse.json({ ok: false, error: "email_in_use" });
 
-  const trialDays = Number(plan.trial_days) || 0;
   const origin = siteOrigin(new URL(req.url).origin);
   const result = await provisionCompany({
     companyName: company,
@@ -52,9 +48,10 @@ export async function POST(req: Request) {
     ownerEmail: email,
     ownerPhone: phone,
     planId: plan.id as string,
-    status: trialDays > 0 ? "trialing" : "active",
-    trialEndsAt: trialDays > 0 ? new Date(Date.now() + trialDays * 24 * 60 * 60_000).toISOString() : null,
+    // Waits for the platform owner's approval; the trial starts then.
+    status: "pending",
     via: "signup",
+    sendWelcome: false,
     origin,
   });
   if (!result.ok) {

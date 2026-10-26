@@ -3,8 +3,9 @@ import { getPlatformAdmin, getCompany, audit } from "@/lib/tenant";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPasswordLink, siteOrigin } from "@/lib/provision";
 import { clearBrandCache } from "@/lib/companyBrand";
+import { generateInvoices } from "@/lib/billing";
 
-const STATUSES = ["trialing", "active", "past_due", "suspended", "cancelled"];
+const STATUSES = ["pending", "trialing", "active", "past_due", "suspended", "cancelled"];
 
 /**
  * Change a company (platform owner): status (suspend / reactivate), plan,
@@ -40,7 +41,50 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     await audit("company_updated", { actorId: owner.userId, actorEmail: owner.email, companyId: id, detail: patch });
   }
 
+  // A sign-up waiting for approval: approve starts its trial (or makes it
+  // active) and emails the owner their sign-in link; reject removes it.
+  if (b.approve === true || b.reject === true) {
+    if (company.status !== "pending") return NextResponse.json({ ok: false, error: "not_pending" });
+    if (b.reject === true) {
+      const { data: logins } = await admin.from("profiles").select("id").eq("company_id", id);
+      const { error } = await admin.from("companies").delete().eq("id", id);
+      if (error) return NextResponse.json({ ok: false, error: "delete_failed" });
+      for (const l of logins ?? []) await admin.auth.admin.deleteUser(l.id as string).catch(() => {});
+      await audit("signup_rejected", { actorId: owner.userId, actorEmail: owner.email, detail: { id, name: company.name, email: company.owner_email } });
+      return NextResponse.json({ ok: true, deleted: true });
+    }
+    const { data: plan } = await admin.from("plans").select("name, trial_days").eq("id", company.plan_id ?? "").maybeSingle();
+    const trialDays = Number(plan?.trial_days) || 0;
+    const { error } = await admin
+      .from("companies")
+      .update({
+        status: trialDays > 0 ? "trialing" : "active",
+        trial_ends_at: trialDays > 0 ? new Date(Date.now() + trialDays * 86_400_000).toISOString() : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) return NextResponse.json({ ok: false, error: "save_failed" });
+    clearBrandCache(id);
+    // No trial: its first invoice goes on the Billing list now.
+    await generateInvoices(7).catch(() => 0);
+    const { data: prof } = await admin.from("profiles").select("email, full_name").eq("company_id", id).eq("role", "admin").limit(1).maybeSingle();
+    const emailed = prof?.email
+      ? await sendPasswordLink({
+          email: prof.email as string,
+          fullName: (prof.full_name as string) ?? "",
+          companyName: company.name,
+          planName: (plan?.name as string) ?? undefined,
+          kind: "welcome",
+          origin: siteOrigin(new URL(req.url).origin),
+          slug: company.slug,
+        })
+      : false;
+    await audit("signup_approved", { actorId: owner.userId, actorEmail: owner.email, companyId: id, detail: { trial_days: trialDays, emailed } });
+    return NextResponse.json({ ok: true, emailed });
+  }
+
   if (b.resend_welcome === true) {
+    if (company.status === "pending") return NextResponse.json({ ok: false, error: "not_approved" });
     const { data: prof } = await admin
       .from("profiles")
       .select("email, full_name")
