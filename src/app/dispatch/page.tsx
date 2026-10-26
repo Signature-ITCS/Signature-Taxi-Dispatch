@@ -39,6 +39,7 @@ import {
   ChevronDown,
   UserPlus,
   Map as MapIcon,
+  Pencil,
   type LucideIcon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -46,6 +47,7 @@ import DriverMap from "@/components/dispatch/DriverMap";
 import BookingWidget from "@/components/booking/BookingWidget";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import ExternalBookingModal from "@/components/dashboard/ExternalBookingModal";
+import EditBookingModal from "@/components/dashboard/EditBookingModal";
 import LoadError from "@/components/dashboard/LoadError";
 import { matchesDriver } from "@/components/dashboard/DriverSearch";
 import { money, timeAgo, cn, normalizeWhatsapp, isValidPhone, dateTimeFull, dateTime } from "@/lib/format";
@@ -126,6 +128,7 @@ export default function DispatchPage() {
   }, []);
 
   const selected = jobs.find((j) => j.id === selectedId) ?? null;
+  const [editingJob, setEditingJob] = useState(false);
 
 
 
@@ -681,6 +684,12 @@ export default function DispatchPage() {
                     <span className="font-mono text-xs font-semibold text-gray-400">
                       {selected.booking_number}
                     </span>
+                    <button
+                      onClick={() => setEditingJob(true)}
+                      className="ml-auto mr-3 flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                      <Pencil className="h-3 w-3" /> Edit
+                    </button>
                     <span className="font-display text-lg font-bold text-ink-950">
                       {money(selected.estimated_fare)}
                     </span>
@@ -991,6 +1000,10 @@ export default function DispatchPage() {
       )}
 
       {showManual && <ManualBookingModal onClose={() => setShowManual(false)} />}
+
+      {editingJob && selected && (
+        <EditBookingModal booking={selected} onClose={() => setEditingJob(false)} onSaved={() => loadJobs()} />
+      )}
 
       {showExternal && (
         <ExternalBookingModal

@@ -30,6 +30,7 @@ import {
   CalendarRange,
   Printer,
   Download,
+  Pencil,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import Pagination, { usePageState } from "@/components/dashboard/Pagination";
@@ -38,6 +39,7 @@ import { fetchReportRows, filtersToParams, toCsv, type ReportFilters } from "@/l
 import PageHeader from "@/components/admin/PageHeader";
 import LoadError from "@/components/dashboard/LoadError";
 import ExternalBookingModal from "@/components/dashboard/ExternalBookingModal";
+import EditBookingModal from "@/components/dashboard/EditBookingModal";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import SheetHandle from "@/components/dashboard/SheetHandle";
 import { money, clock, cn, dateTime, dateTimeFull } from "@/lib/format";
@@ -613,6 +615,8 @@ export default function BookingsPage() {
 
       {detail && (
         <BookingDetailModal
+          // Re-open fresh after an edit, so every field shows the saved values.
+          key={`${detail.id}:${detail.updated_at}`}
           row={detail}
           linked={
             detail.trip_group_id
@@ -621,6 +625,10 @@ export default function BookingsPage() {
           }
           onClose={() => setDetail(null)}
           onChanged={(id, patch) => setRows((rs) => rs.map((x) => (x.id === id ? { ...x, ...patch } : x)))}
+          onEdited={(updated) => {
+            setRows((rs) => rs.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)));
+            setDetail((d) => (d && d.id === updated.id ? { ...d, ...updated } : d));
+          }}
         />
       )}
     </div>
@@ -632,12 +640,15 @@ function BookingDetailModal({
   linked,
   onClose,
   onChanged,
+  onEdited,
 }: {
   row: Row;
   linked?: Row | null;
   onClose: () => void;
   onChanged: (id: string, patch: Partial<Row>) => void;
+  onEdited: (updated: Row) => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const vias = (row.via_points ?? []).filter((v) => v.address);
   const review = row.review?.[0] ?? null;
   // Off-platform jobs have no driver and no dispatch flow moving them along, so
@@ -738,10 +749,25 @@ function BookingDetailModal({
               {row.source?.name ?? "—"} · {clock(row.created_at)}
             </p>
           </div>
-          <button onClick={onClose} className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100" aria-label="Close">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              onClick={() => setEditing(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Edit
+            </button>
+            <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100" aria-label="Close">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
+        {editing && (
+          <EditBookingModal
+            booking={row}
+            onClose={() => setEditing(false)}
+            onSaved={(b) => onEdited({ ...row, ...b } as Row)}
+          />
+        )}
 
         {/* Customer */}
         <Section title="Customer">
