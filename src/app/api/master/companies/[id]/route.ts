@@ -41,6 +41,19 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     await audit("company_updated", { actorId: owner.userId, actorEmail: owner.email, companyId: id, detail: patch });
   }
 
+  // Lost phone: remove a company user's authenticator(s), so they can sign in
+  // with their password and set up a new one.
+  if (typeof b.reset_2fa_email === "string") {
+    const email = b.reset_2fa_email.trim().toLowerCase();
+    const { data: prof } = await admin.from("profiles").select("id, email").eq("company_id", id).eq("email", email).maybeSingle();
+    if (!prof) return NextResponse.json({ ok: false, error: "no_such_user" });
+    const { data: list, error: lErr } = await admin.auth.admin.mfa.listFactors({ userId: prof.id as string });
+    if (lErr) return NextResponse.json({ ok: false, error: "reset_failed" });
+    for (const f of list?.factors ?? []) await admin.auth.admin.mfa.deleteFactor({ id: f.id, userId: prof.id as string });
+    await audit("two_factor_reset", { actorId: owner.userId, actorEmail: owner.email, companyId: id, detail: { user: email, removed: list?.factors?.length ?? 0 } });
+    return NextResponse.json({ ok: true, removed: list?.factors?.length ?? 0 });
+  }
+
   // A sign-up waiting for approval: approve starts its trial (or makes it
   // active) and emails the owner their sign-in link; reject removes it.
   if (b.approve === true || b.reject === true) {

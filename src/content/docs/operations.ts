@@ -159,6 +159,36 @@ They should install it on their phone and **allow notifications** — that is ho
     ],
   },
   {
+    slug: "two-factor",
+    title: "Two-factor sign-in",
+    summary: "Protect logins with a code from an authenticator app — and require it for your office staff.",
+    audience: "company",
+    sections: [
+      {
+        id: "setup",
+        title: "Turn it on for your login",
+        body: `1. Install an authenticator app on your phone: **Google Authenticator**, **Microsoft Authenticator**, **Authy** or **1Password**.
+2. In the dashboard menu open **Two-factor sign-in** → **Set up an authenticator app**.
+3. Scan the QR code with the app (or type the key shown under it), then type the 6-digit code the app shows.
+
+From then on, every sign-in asks for the current code after your password. Someone who steals or guesses your password still can't get in — not through the website, and not through the database either.`,
+      },
+      {
+        id: "require",
+        title: "Require it for all office staff (admins)",
+        body: `On the **Two-factor sign-in** page, admins can tick **Require two-factor sign-in for office staff**. Every admin and dispatcher without an authenticator is then asked to set one up the next time they sign in, and can't do anything until they have. Drivers are never asked.
+
+You need your own authenticator set up first, so you can't lock yourself out.`,
+      },
+      {
+        id: "lost",
+        title: "Lost or new phone",
+        body: `- **New phone, old one still working**: on **Two-factor sign-in**, press **Remove / replace authenticator**, then set it up again on the new phone.
+- **Phone lost**: ask us (the platform owner) to reset your two-factor sign-in. Then sign in with your password and set up a new authenticator.`,
+      },
+    ],
+  },
+  {
     slug: "plan-billing",
     title: "Plan & billing",
     summary: "Your plan, usage, invoices, changing plan and cancelling.",

@@ -52,6 +52,8 @@ const ERRORS: Record<string, string> = {
   no_owner_login: "The owner has no login to send it to.",
   not_pending: "This company was already approved.",
   not_approved: "Approve the company first — that sends the welcome email.",
+  no_such_user: "No login with that email in this company.",
+  reset_failed: "Couldn't reset it — try again.",
 };
 const STATUS_LABEL: Record<string, string> = { pending: "pending approval" };
 
@@ -245,6 +247,7 @@ function CompanyPanel({ company: c, plans, onClose, onChanged }: { company: Comp
   const [planId, setPlanId] = useState(c.plan_id ?? "");
   const [notes, setNotes] = useState(c.notes ?? "");
   const [phone, setPhone] = useState(c.owner_phone ?? "");
+  const [resetEmail, setResetEmail] = useState("");
   const [paused, setPaused] = useState(!!c.billing_paused);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -372,6 +375,28 @@ function CompanyPanel({ company: c, plans, onClose, onChanged }: { company: Comp
             {busy === "welcome" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />} Re-send welcome email
           </button>
         </div>
+
+        <section className="space-y-2 rounded-xl border border-gray-100 p-4">
+          <p className="font-medium text-gray-700">Lost phone — reset two-factor sign-in</p>
+          <p className="text-xs text-gray-500">
+            Removes the authenticator from one of this company&apos;s logins, so they can sign in with their password and set up a
+            new one (straight away if their company requires it). Check it really is them first.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <input value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} placeholder="their login email"
+              className="min-w-[14rem] flex-1 rounded-xl border border-gray-200 px-3 py-2" />
+            <button
+              onClick={async () => {
+                if (!resetEmail.trim() || !window.confirm(`Reset two-factor sign-in for ${resetEmail.trim()}?`)) return;
+                if (await call("reset2fa", "PATCH", `/api/master/companies/${c.id}`, { reset_2fa_email: resetEmail.trim() }, "Two-factor sign-in reset for that login.")) setResetEmail("");
+              }}
+              disabled={!!busy}
+              className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 font-semibold text-ink-950 disabled:opacity-60"
+            >
+              {busy === "reset2fa" && <Loader2 className="h-4 w-4 animate-spin" />} Reset
+            </button>
+          </div>
+        </section>
 
         <section className="rounded-xl border border-gray-100 p-4">
           <div className="flex items-center justify-between">

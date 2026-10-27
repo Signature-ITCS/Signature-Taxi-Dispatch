@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
+import { twoFactorOf, officeRole } from "@/lib/twoFactor";
 
 /**
  * Which company a request belongs to. Server-only.
@@ -27,6 +28,7 @@ export interface Company {
   stripe_subscription_id: string | null;
   custom_domain: string | null;
   support_access_until: string | null;
+  require_2fa: boolean;
   created_at: string;
 }
 
@@ -35,7 +37,7 @@ export const OPEN_STATUSES: CompanyStatus[] = ["trialing", "active", "past_due"]
 export const companyIsOpen = (c: Pick<Company, "status"> | null | undefined) => !!c && OPEN_STATUSES.includes(c.status);
 
 const COMPANY_COLUMNS =
-  "id, name, slug, status, plan_id, owner_email, trial_ends_at, current_period_end, stripe_customer_id, stripe_subscription_id, custom_domain, support_access_until, created_at";
+  "id, name, slug, status, plan_id, owner_email, trial_ends_at, current_period_end, stripe_customer_id, stripe_subscription_id, custom_domain, support_access_until, require_2fa, created_at";
 
 export async function getCompany(id: string): Promise<Company | null> {
   const { data } = await createAdminClient().from("companies").select(COMPANY_COLUMNS).eq("id", id).maybeSingle();
@@ -135,8 +137,12 @@ export interface StaffContext {
 }
 
 /**
- * The signed-in user's profile and company, or null when nobody is signed in.
- * `company` is returned even when it is suspended — callers decide what to show.
+ * The signed-in user's profile and company, or null when nobody is signed in —
+ * or when two-factor sign-in is still owed (their authenticator code, or
+ * setting one up because their company requires it). Every staff page and API
+ * goes through here, so nothing is served before that; the sign-in page asks
+ * /api/auth/two-factor what is needed. `company` is returned even when it is
+ * suspended — callers decide what to show.
  */
 export async function getStaffContext(): Promise<StaffContext | null> {
   const supabase = await createClient();
@@ -148,6 +154,8 @@ export async function getStaffContext(): Promise<StaffContext | null> {
   if (!profile?.company_id) return null;
   const company = await getCompany(profile.company_id as string);
   if (!company) return null;
+  const tf = await twoFactorOf(supabase, company.require_2fa && officeRole(profile.role as string));
+  if (tf.block) return null;
   return { userId: user.id, email: user.email ?? null, profile: profile as StaffProfile, company };
 }
 
@@ -159,7 +167,12 @@ export async function getOfficeContext(opts: { adminOnly?: boolean } = {}): Prom
   return ok ? ctx : null;
 }
 
-/** The signed-in platform owner, or null. */
+/**
+ * The signed-in platform owner, or null. The owner must always have passed
+ * two-factor sign-in in this session — the master dashboard holds every
+ * company — so a password alone gets null here (and so every master page and
+ * API refuses).
+ */
 export async function getPlatformAdmin(): Promise<{ userId: string; email: string | null } | null> {
   const supabase = await createClient();
   const {
@@ -167,7 +180,15 @@ export async function getPlatformAdmin(): Promise<{ userId: string; email: strin
   } = await supabase.auth.getUser();
   if (!user) return null;
   const { data } = await createAdminClient().from("platform_admins").select("user_id").eq("user_id", user.id).maybeSingle();
-  return data ? { userId: user.id, email: user.email ?? null } : null;
+  if (!data) return null;
+  if ((await twoFactorOf(supabase, true)).block) return null;
+  return { userId: user.id, email: user.email ?? null };
+}
+
+/** Is the signed-in user the platform owner (whether or not two-factor is done yet)? */
+export async function isPlatformOwnerUser(userId: string): Promise<boolean> {
+  const { data } = await createAdminClient().from("platform_admins").select("user_id").eq("user_id", userId).maybeSingle();
+  return !!data;
 }
 
 /** Record a sensitive action in the platform audit log (best-effort). */

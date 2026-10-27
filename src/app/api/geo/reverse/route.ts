@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionProfile } from "@/lib/auth";
+import { getOfficeContext } from "@/lib/tenant";
 
 /**
  * Staff-only: "where is this?" for the driver map — a short area name such as
@@ -14,8 +14,8 @@ const cache = new Map<string, string>();
 let lastCall = 0;
 
 export async function GET(req: Request) {
-  const me = await getSessionProfile();
-  if (!me || (me.role !== "admin" && me.role !== "dispatcher")) {
+  // Office staff of an open company who have passed two-factor sign-in if they need it.
+  if (!(await getOfficeContext())) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 403 });
   }
 

@@ -4,16 +4,10 @@ import Link from "next/link";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Mail, Lock, Loader2, LogIn } from "lucide-react";
+import { Mail, Lock, Loader2, LogIn, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/Brand";
 import { createClient } from "@/lib/supabase/client";
 import { logActivity } from "@/lib/activity";
-
-const HOME: Record<string, string> = {
-  admin: "/admin",
-  dispatcher: "/dispatch",
-  driver: "/driver",
-};
 
 function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
   const router = useRouter();
@@ -22,12 +16,46 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [step, setStep] = useState<"password" | "code">("password");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const need = params.get("need");
 
-  // Already signed in (e.g. the installed app re-opened on /login)? Skip the
-  // form and go straight to the right board.
+  /**
+   * Signed in with a password: ask the server what is still owed for
+   * two-factor sign-in, then go on — code step, set-up page, or home.
+   */
+  const proceed = async (fresh: boolean) => {
+    const st = await fetch("/api/auth/two-factor", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+    if (!st?.signedIn) {
+      setLoading(false);
+      return;
+    }
+    if (!st.active) {
+      setLoading(false);
+      setError("Your account is not active. Contact an admin.");
+      await supabase.auth.signOut();
+      return;
+    }
+    const wanted = params.get("next");
+    const next = wanted && wanted.startsWith("/") && !wanted.startsWith("//") && (st.owner ? wanted.startsWith("/master") : !wanted.startsWith("/master")) ? wanted : st.home;
+    if (st.block === "code") {
+      setStep("code");
+      setLoading(false);
+      return;
+    }
+    if (st.block === "setup") {
+      router.push(`/security?next=${encodeURIComponent(next)}`);
+      return;
+    }
+    if (fresh && !st.owner) await logActivity(supabase, "login", "Signed in to the dashboard");
+    router.push(next);
+    router.refresh();
+  };
+
+  // Already signed in (e.g. the installed app re-opened on /login, or a page
+  // sent them back here for their authenticator code)? Carry on from there.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -35,20 +63,7 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user || cancelled) return;
-      // The platform owner has no company profile — their screens are /master.
-      const { data: isOwner } = await supabase.rpc("is_platform_admin");
-      if (cancelled) return;
-      if (isOwner) {
-        router.replace("/master");
-        return;
-      }
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role, is_active")
-        .eq("id", user.id)
-        .maybeSingle();
-      if (cancelled || !profile?.is_active) return;
-      router.replace(params.get("next") || HOME[profile.role] || "/");
+      await proceed(false);
     })();
     return () => {
       cancelled = true;
@@ -60,39 +75,42 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error || !data.user) {
       setLoading(false);
       setError("Invalid email or password.");
       return;
     }
+    setPassword("");
+    await proceed(true);
+  };
 
-    const { data: isOwner } = await supabase.rpc("is_platform_admin");
-    if (isOwner) {
-      router.push("/master");
-      router.refresh();
-      return;
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role, is_active")
-      .eq("id", data.user.id)
-      .maybeSingle();
-
-    if (!profile || !profile.is_active) {
+  const verifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    const { data: factors } = await supabase.auth.mfa.listFactors();
+    const factor = factors?.totp?.[0];
+    if (!factor) {
       setLoading(false);
-      setError("Your account is not active. Contact an admin.");
-      await supabase.auth.signOut();
+      setError("No authenticator found on this account. Ask your administrator to reset it.");
       return;
     }
+    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code: code.replace(/s/g, "") });
+    if (error) {
+      setLoading(false);
+      setCode("");
+      setError("That code didn't work. Check the time on your phone and try the newest code.");
+      return;
+    }
+    await proceed(true);
+  };
 
-    await logActivity(supabase, "login", "Signed in to the dashboard");
-
-    const next = params.get("next") || HOME[profile.role] || "/";
-    router.push(next);
-    router.refresh();
+  const useOtherAccount = async () => {
+    await supabase.auth.signOut();
+    setStep("password");
+    setCode("");
+    setError(null);
   };
 
   return (
@@ -115,6 +133,36 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
           </div>
         )}
 
+        {step === "code" ? (
+          <form onSubmit={verifyCode} className="space-y-4 rounded-3xl border border-gray-100 bg-white p-6 shadow-xl shadow-gray-200/60">
+            <div className="flex items-center gap-2 font-semibold text-ink-950">
+              <ShieldCheck className="h-5 w-5 text-brand-600" /> Two-factor sign-in
+            </div>
+            <p className="text-sm text-gray-600">Open your authenticator app and type the 6-digit code for this account.</p>
+            <input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              required
+              maxLength={7}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/[^d ]/g, ""))}
+              placeholder="123 456"
+              className="w-full rounded-xl border border-gray-200 bg-white py-3.5 text-center font-mono text-2xl tracking-[0.3em] outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10"
+            />
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <button
+              type="submit"
+              disabled={loading || code.replace(/s/g, "").length !== 6}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-3.5 font-semibold text-white shadow-lg shadow-brand-500/30 transition-all hover:bg-brand-600 disabled:bg-gray-200"
+            >
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Verify"}
+            </button>
+            <button type="button" onClick={useOtherAccount} className="w-full text-center text-sm text-gray-500 hover:text-ink-950">
+              Use a different account
+            </button>
+          </form>
+        ) : (
         <form
           onSubmit={signIn}
           className="space-y-4 rounded-3xl border border-gray-100 bg-white p-6 shadow-xl shadow-gray-200/60"
@@ -157,6 +205,7 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
             </Link>
           </p>
         </form>
+        )}
       </motion.div>
     </main>
   );

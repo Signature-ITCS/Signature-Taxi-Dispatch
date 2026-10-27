@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Radio, ClipboardList, CarFront, Users, LogOut, Map as MapIcon, CalendarDays, BookOpen } from "lucide-react";
+import { Radio, ClipboardList, CarFront, Users, LogOut, Map as MapIcon, CalendarDays, BookOpen, ShieldCheck } from "lucide-react";
 import SignOutButton from "@/components/dashboard/SignOutButton";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/format";
@@ -91,6 +91,9 @@ export default function DispatchShell({
               <p className="text-[11px] text-gray-400">{isAdmin ? "Admin" : "Dispatcher"}</p>
             </div>
           </div>
+          <Link href="/security" className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-50">
+            <ShieldCheck className="h-4 w-4" /> Two-factor sign-in
+          </Link>
           <SignOutButton dark={false} full />
         </div>
       </aside>
