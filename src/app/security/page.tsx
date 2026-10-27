@@ -14,6 +14,9 @@ interface Status {
   verified: boolean;
   required: boolean;
   block: null | "code" | "setup";
+  graceUntil: string | null;
+  /** Whole days left of the grace (worked out when the status loads). */
+  graceDays?: number;
   companyRequires: boolean;
   canRequire: boolean;
   home: string;
@@ -49,6 +52,7 @@ function Security() {
       router.replace("/login?next=/security");
       return null;
     }
+    if (s.graceUntil) s.graceDays = Math.max(1, Math.ceil((new Date(s.graceUntil).getTime() - Date.now()) / 86_400_000));
     setSt(s);
     return s;
   }, [router]);
@@ -143,9 +147,29 @@ function Security() {
             Authenticator, Authy, 1Password…).
           </p>
 
+          {st.graceUntil && !st.enrolled && (() => {
+            const days = st.graceDays ?? 3;
+            return (
+              <div className="space-y-3 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
+                <p>
+                  <strong>Please set up two-factor sign-in — {days} day{days === 1 ? "" : "s"} left.</strong> Every office login
+                  needs it. After {new Date(st.graceUntil).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} you
+                  won&apos;t be able to use the dashboard until it&apos;s set up. It takes about a minute.
+                </p>
+                {!enroll && (
+                  <a href={next(st)} className="inline-block font-semibold text-amber-900 underline">Remind me later</a>
+                )}
+              </div>
+            );
+          })()}
+
           {st.block === "setup" && (
             <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
-              {st.owner ? "The master dashboard requires two-factor sign-in." : "Your company requires two-factor sign-in for office staff."} Set it
+              {st.owner
+                ? "The master dashboard requires two-factor sign-in."
+                : st.companyRequires
+                  ? "Your company requires two-factor sign-in for office staff."
+                  : "Your 3 days to set up two-factor sign-in are over — every office login needs it."} Set it
               up below to carry on.
             </p>
           )}

@@ -33,7 +33,7 @@ export const developerPages: DocPage[] = [
 - The \`secrets\` table has no access rules for any user: only the server reads it, at the moment of use.
 - No key, or part of one, is ever sent to a browser. Screens only know a key is saved, and when.
 - Changes are logged (which key, who, when) — never the value.
-- **Two-factor sign-in** (authenticator app) is **required** for your master login: a password alone gets nothing in the master dashboard. Set it up at **/security** the first time you sign in. Lost phone: remove your factor in **Supabase → Authentication → Users → you → MFA**, then set up a new one. Company staff can turn it on themselves; company admins can require it for their office staff; you can reset a company user's in **Master → Companies → the company → Lost phone**.
+- **Two-factor sign-in** (authenticator app) is **required** for your master login: a password alone gets nothing in the master dashboard. Set it up at **/security** the first time you sign in. Lost phone: remove your factor in **Supabase → Authentication → Users → you → MFA**, then set up a new one. Every company admin and dispatcher must set it up within 3 days of their login being created (for sign-ups, from your approval) — prompted at each sign-in, blocked after; company admins can require it straight away; you can reset a company user's in **Master → Companies → the company → Lost phone**.
 
 !> Keep \`SECRETS_ENCRYPTION_KEY\` in a password manager and **never change it** once keys are saved — every saved key would have to be re-entered. Turn on two-factor sign-in on Vercel, Supabase, GitHub, Stripe and Resend.`,
       },

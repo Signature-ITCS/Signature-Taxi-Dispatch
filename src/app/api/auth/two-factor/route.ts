@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getOfficeContext, isPlatformOwnerUser, audit } from "@/lib/tenant";
-import { twoFactorOf, officeRole } from "@/lib/twoFactor";
+import { twoFactorOf, officeTwoFactor } from "@/lib/twoFactor";
 import { tenantDb } from "@/lib/tenantDb";
 
 const HOME: Record<string, string> = { admin: "/admin", dispatcher: "/dispatch", driver: "/driver" };
@@ -19,14 +19,15 @@ export async function GET() {
   if (!user) return NextResponse.json({ ok: true, signedIn: false });
 
   const owner = await isPlatformOwnerUser(user.id);
-  const { data: profile } = await supabase.from("profiles").select("role, is_active, company_id").eq("id", user.id).maybeSingle();
+  const { data: profile } = await supabase.from("profiles").select("role, is_active, company_id, two_factor_due_at").eq("id", user.id).maybeSingle();
   let companyRequires = false;
   if (profile?.company_id) {
     const { data: c } = await createAdminClient().from("companies").select("require_2fa").eq("id", profile.company_id).maybeSingle();
     companyRequires = !!c?.require_2fa;
   }
   const role = (profile?.role as string | undefined) ?? null;
-  const tf = await twoFactorOf(supabase, owner || (companyRequires && officeRole(role)));
+  const need = officeTwoFactor(role, companyRequires, (profile?.two_factor_due_at as string | null) ?? null);
+  const tf = await twoFactorOf(supabase, owner || need.required, owner ? null : need.graceUntil);
   return NextResponse.json({
     ok: true,
     signedIn: true,

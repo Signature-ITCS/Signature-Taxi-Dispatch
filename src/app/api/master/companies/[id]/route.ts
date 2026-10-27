@@ -78,6 +78,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       .eq("id", id);
     if (error) return NextResponse.json({ ok: false, error: "save_failed" });
     clearBrandCache(id);
+    // Their 3 days to set up two-factor sign-in start now, not at sign-up.
+    await admin.from("profiles").update({ two_factor_due_at: new Date(Date.now() + 3 * 86_400_000).toISOString() }).eq("company_id", id);
     // No trial: its first invoice goes on the Billing list now.
     await generateInvoices(7).catch(() => 0);
     const { data: prof } = await admin.from("profiles").select("email, full_name").eq("company_id", id).eq("role", "admin").limit(1).maybeSingle();

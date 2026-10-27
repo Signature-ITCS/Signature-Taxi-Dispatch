@@ -50,6 +50,11 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
       return;
     }
     if (fresh && !st.owner) await logActivity(supabase, "login", "Signed in to the dashboard");
+    // Still in their 3 days to set up two-factor sign-in: ask at every sign-in.
+    if (fresh && st.graceUntil) {
+      router.push(`/security?next=${encodeURIComponent(next)}&grace=1`);
+      return;
+    }
     router.push(next);
     router.refresh();
   };

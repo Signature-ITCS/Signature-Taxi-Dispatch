@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
-import { twoFactorOf, officeRole } from "@/lib/twoFactor";
+import { twoFactorOf, officeTwoFactor } from "@/lib/twoFactor";
 
 /**
  * Which company a request belongs to. Server-only.
@@ -154,7 +154,8 @@ export async function getStaffContext(): Promise<StaffContext | null> {
   if (!profile?.company_id) return null;
   const company = await getCompany(profile.company_id as string);
   if (!company) return null;
-  const tf = await twoFactorOf(supabase, company.require_2fa && officeRole(profile.role as string));
+  const need = officeTwoFactor(profile.role as string, company.require_2fa, profile.two_factor_due_at as string | null);
+  const tf = await twoFactorOf(supabase, need.required, need.graceUntil);
   if (tf.block) return null;
   return { userId: user.id, email: user.email ?? null, profile: profile as StaffProfile, company };
 }

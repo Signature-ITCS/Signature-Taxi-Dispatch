@@ -171,12 +171,14 @@ They should install it on their phone and **allow notifications** — that is ho
 2. In the dashboard menu open **Two-factor sign-in** → **Set up an authenticator app**.
 3. Scan the QR code with the app (or type the key shown under it), then type the 6-digit code the app shows.
 
+**Every admin and dispatcher needs it.** A new login gets **3 days** to set it up (for a new company, counted from when its account is approved): each sign-in reminds you, with **Remind me later**. After 3 days the dashboard only opens once it's set up. Drivers never need it.
+
 From then on, every sign-in asks for the current code after your password. Someone who steals or guesses your password still can't get in — not through the website, and not through the database either.`,
       },
       {
         id: "require",
-        title: "Require it for all office staff (admins)",
-        body: `On the **Two-factor sign-in** page, admins can tick **Require two-factor sign-in for office staff**. Every admin and dispatcher without an authenticator is then asked to set one up the next time they sign in, and can't do anything until they have. Drivers are never asked.
+        title: "Require it straight away (admins)",
+        body: `On the **Two-factor sign-in** page, admins can tick **Require two-factor sign-in for office staff** to skip the 3 days: every admin and dispatcher without an authenticator must then set one up the next time they sign in, before doing anything else. Drivers are never asked.
 
 You need your own authenticator set up first, so you can't lock yourself out.`,
       },
