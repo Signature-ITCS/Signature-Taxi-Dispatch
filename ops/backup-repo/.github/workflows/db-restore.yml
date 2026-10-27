@@ -41,6 +41,8 @@ jobs:
       BACKUP_DATE: ${{ inputs.backup_date }}
       CONFIRM: ${{ inputs.confirm }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Safety check
         run: |
           if [ "$CONFIRM" != "RESTORE" ]; then
@@ -119,6 +121,14 @@ jobs:
           # backup), so this only ever adds missing ones.
           psql "$SUPABASE_DB_URL" -q -f backup/auth.sql && echo "Logins restored." \
             || echo "::warning::Some logins could not be loaded."
+
+      - name: Lock the internal functions again
+        run: |
+          # Re-created functions get Supabase's default grants (anon, authenticated);
+          # the platform's internal ones must stay server-only. Failing here is
+          # serious: stop and say so.
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -q -f .github/scripts/lock-functions.sql
+          echo "Internal functions locked."
 
       - name: Re-enable live updates and refresh the API
         run: |

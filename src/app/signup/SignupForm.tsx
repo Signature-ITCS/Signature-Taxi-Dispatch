@@ -15,7 +15,6 @@ const ERRORS: Record<string, string> = {
   missing_fields: "Fill in your company name, your name and a valid email.",
   email_in_use: "That email already has an account. Sign in instead, or use another email.",
   unknown_plan: "Choose a plan.",
-  signups_closed: "Sign-ups are not open yet. Please get in touch with us.",
   rate_limited: "Too many attempts. Try again in a little while.",
   invalid_phone: "Enter a valid mobile / WhatsApp number — we send your invoices there.",
   create_failed: "We couldn't create your account. Please try again, or get in touch with us.",

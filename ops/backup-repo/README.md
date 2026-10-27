@@ -117,6 +117,10 @@ psql "SESSION_POOLER_CONNECTION_STRING" -v ON_ERROR_STOP=1 --single-transaction 
 
 (Logins that already exist are skipped automatically.)
 
+### After any whole-database restore
+
+The **Restore database** workflow locks the platform's internal functions again by itself. If you restore some other way (pasting a backup into the SQL Editor, psql), the backup file does it at its end — but if in doubt, run `.github/scripts/lock-functions.sql` in the Supabase SQL Editor afterwards. (Supabase hands re-created functions to every visitor by default; this takes the internal ones back.)
+
 ## 4. Also keep a copy in Google Drive (optional)
 
 GitHub keeps a year. To have a copy in your own Google Drive as well:

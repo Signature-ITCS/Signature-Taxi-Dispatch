@@ -98,6 +98,11 @@ jobs:
             for t in bookings drivers activity_logs staff_notifications; do
               echo "do \$\$ begin alter publication supabase_realtime add table public.$t; exception when others then null; end \$\$;"
             done
+            echo
+            echo "-- ── 4. Lock the internal functions again ──"
+            echo "-- Supabase gives re-created functions to anon/authenticated by default;"
+            echo "-- the platform's internal ones must stay server-only."
+            grep -v '^notify pgrst' .github/scripts/lock-functions.sql
             echo "notify pgrst, 'reload schema';"
           } | sed -E '/^.(un)?restrict [A-Za-z0-9]+$/d' > "$FILE"
           # (pg_dump adds \restrict / \unrestrict psql-only lines; the SQL Editor
