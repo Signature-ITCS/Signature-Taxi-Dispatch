@@ -96,7 +96,7 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
       setError("No authenticator found on this account. Ask your administrator to reset it.");
       return;
     }
-    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code: code.replace(/s/g, "") });
+    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code: code.replace(/\s/g, "") });
     if (error) {
       setLoading(false);
       setCode("");
@@ -146,14 +146,14 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
               required
               maxLength={7}
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/[^d ]/g, ""))}
+              onChange={(e) => setCode(e.target.value.replace(/[^\d ]/g, ""))}
               placeholder="123 456"
               className="w-full rounded-xl border border-gray-200 bg-white py-3.5 text-center font-mono text-2xl tracking-[0.3em] outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10"
             />
             {error && <p className="text-sm text-red-600">{error}</p>}
             <button
               type="submit"
-              disabled={loading || code.replace(/s/g, "").length !== 6}
+              disabled={loading || code.replace(/\s/g, "").length !== 6}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-3.5 font-semibold text-white shadow-lg shadow-brand-500/30 transition-all hover:bg-brand-600 disabled:bg-gray-200"
             >
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Verify"}
