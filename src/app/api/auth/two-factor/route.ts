@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getOfficeContext, isPlatformOwnerUser, audit } from "@/lib/tenant";
 import { twoFactorOf, officeTwoFactor } from "@/lib/twoFactor";
 import { tenantDb } from "@/lib/tenantDb";
+import { getPartnerByUser } from "@/lib/partners";
 
 const HOME: Record<string, string> = { admin: "/admin", dispatcher: "/dispatch", driver: "/driver" };
 
@@ -25,7 +26,9 @@ export async function GET() {
     const { data: c } = await createAdminClient().from("companies").select("require_2fa").eq("id", profile.company_id).maybeSingle();
     companyRequires = !!c?.require_2fa;
   }
-  const role = (profile?.role as string | undefined) ?? null;
+  // A partner-network driver has no company login — their page is /partner.
+  const partner = !owner && !profile ? await getPartnerByUser(user.id) : null;
+  const role = (profile?.role as string | undefined) ?? (partner ? "partner" : null);
   const need = officeTwoFactor(role, companyRequires, (profile?.two_factor_due_at as string | null) ?? null);
   const tf = await twoFactorOf(supabase, owner || need.required, owner ? null : need.graceUntil);
   return NextResponse.json({
@@ -34,11 +37,11 @@ export async function GET() {
     email: user.email ?? null,
     owner,
     role,
-    active: owner || !!profile?.is_active,
+    active: owner || !!profile?.is_active || (!!partner && partner.status !== "pending"),
     ...tf,
     companyRequires,
     canRequire: role === "admin",
-    home: owner ? "/master" : (role && HOME[role]) || "/",
+    home: owner ? "/master" : partner ? "/partner" : (role && HOME[role]) || "/",
   });
 }
 

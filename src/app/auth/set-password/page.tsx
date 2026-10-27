@@ -41,7 +41,8 @@ export default function SetPasswordPage() {
     if (err) return setError(err.message || "Couldn't save the password. Try again.");
     setDone(true);
     // "/" sends each person to their own area (owner, admin, dispatcher, driver).
-    setTimeout(() => router.replace("/"), 1200);
+    // The sign-in page sends them on: dashboard, two-factor set-up, or partner page.
+    setTimeout(() => router.replace("/login"), 1200);
   };
 
   return (

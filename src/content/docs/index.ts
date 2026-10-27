@@ -17,7 +17,7 @@ export const DOC_GROUPS: DocGroup[] = [
     pages: page(companyPages, "company-details", "branding", "email", "sms", "stripe", "alert-emails", "booking-widget"),
   },
   { title: "Pricing", description: "Fares, extra charges and fixed prices.", pages: page(operationsPages, "pricing", "fixed-prices") },
-  { title: "Your team", description: "Office users and drivers.", pages: page(operationsPages, "dispatchers", "drivers", "two-factor") },
+  { title: "Your team", description: "Office users and drivers.", pages: page(operationsPages, "dispatchers", "drivers", "two-factor", "partner-network") },
   { title: "Plan and backups", description: "Billing, backups and paid help.", pages: page(operationsPages, "plan-billing", "backups", "setup-help") },
   { title: "Dispatch guide", description: "For office staff, day to day.", pages: dispatchPages },
   { title: "Driver guide", description: "For your drivers.", pages: driverPages },

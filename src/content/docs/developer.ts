@@ -114,6 +114,11 @@ A new price applies to invoices made from then on; invoices already made keep th
         body: `**Master → Billing**: **To send**, **Waiting for payment**, **Overdue** and **Paid** invoices, with totals for each. Open an invoice to write the email or WhatsApp, mark it sent, and mark it paid. Full guide: [Billing companies](/documentation/platform-billing).`,
       },
       {
+        id: "partners",
+        title: "Partners",
+        body: `**Master → Partners**: independent drivers and operators apply at **/partners/join** (share that link yourself; it isn't on the home page or in search engines). Check their licences, then **Approve** — they get an email to set a password and sign in at /login to their own page (an **Available now** switch). Press **+1 month paid** when they pay; they're listed only while approved, paid up and with licences in date, and hidden automatically otherwise. **Disable** removes them at once. Reports from companies appear at the top. Set the monthly price shown on the join page at the top right.`,
+      },
+      {
         id: "requests",
         title: "Requests",
         body: `Setup help and restore requests from companies. Mark them **paid**, **in progress** or **done**. Restores are done from **Companies → the company → Backups**.`,

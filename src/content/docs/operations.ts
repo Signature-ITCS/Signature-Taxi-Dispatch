@@ -159,6 +159,28 @@ They should install it on their phone and **allow notifications** — that is ho
     ],
   },
   {
+    slug: "partner-network",
+    title: "Partner network",
+    summary: "Find a licensed independent driver or operator to cover a job.",
+    audience: "company",
+    sections: [
+      {
+        id: "use",
+        title: "Find someone to cover a job",
+        body: `**Dispatch → Partner network** lists independent drivers and operators who have joined the platform. Everyone shown has been checked and approved by us, is paid up, and has licences in date.
+
+- Filter by **licensing council**, **vehicle**, **Available now** and **Operator licence**.
+- Press **WhatsApp** to get their number and open a chat with a ready-written message. Each request is logged.
+- Press **Report** if something went wrong — it comes straight to us.`,
+      },
+      {
+        id: "licensing",
+        title: "Licensing — your responsibility",
+        body: `Give jobs **directly** only to drivers licensed by **your own licensing authority** (e.g. a TfL-licensed operator uses TfL-licensed drivers and vehicles). For a job in another area, **pass the booking to a licensed operator** there — partners marked **Operator licence** can take it as an operator. Check the licence details on the profile before using anyone.`,
+      },
+    ],
+  },
+  {
     slug: "two-factor",
     title: "Two-factor sign-in",
     summary: "Protect logins with a code from an authenticator app — and require it for your office staff.",

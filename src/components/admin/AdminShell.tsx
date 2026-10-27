@@ -20,6 +20,7 @@ import {
   ScrollText,
   Settings,
   ShieldCheck,
+  Handshake,
   DatabaseBackup,
   BookOpen,
   Menu,
@@ -48,6 +49,7 @@ const NAV = [
   { href: "/admin/settings", label: "Settings", icon: Settings },
   { href: "/admin/backups", label: "Backups", icon: DatabaseBackup },
   { href: "/documentation", label: "Help & docs", icon: BookOpen },
+  { href: "/dispatch/network", label: "Partner network", icon: Handshake },
   { href: "/account", label: "Plan & billing", icon: CreditCard },
   { href: "/security", label: "Two-factor sign-in", icon: ShieldCheck },
 ];
