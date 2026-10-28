@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOfficeContext } from "@/lib/tenant";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { rateLimitShared } from "@/lib/rateLimit";
+import { rateLimit } from "@/lib/rateLimit";
 import { notifyOwner, siteOrigin } from "@/lib/provision";
 import { getPlatformName } from "@/lib/companyBrand";
 import { directoryView, isListed, isAvailable, whatsappLink, type Partner } from "@/lib/partners";
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
 
   if (b.action === "contact") {
     // Numbers are given out one at a time, so a login can't scrape the lot.
-    if (!(await rateLimitShared(`network-contact:${office.userId}`, 40, 60 * 60_000))) {
+    if (!rateLimit(`network-contact:${office.userId}`, 40, 60 * 60_000)) {
       return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
     }
     await admin.from("partner_contacts").insert({ partner_id: p.id, ...who });
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
   if (b.action === "report") {
     const reason = String(b.reason ?? "").trim().slice(0, 1000);
     if (reason.length < 5) return NextResponse.json({ ok: false, error: "reason_needed" });
-    if (!(await rateLimitShared(`network-report:${office.userId}`, 10, 60 * 60_000))) return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
+    if (!rateLimit(`network-report:${office.userId}`, 10, 60 * 60_000)) return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
     await admin.from("partner_reports").insert({ partner_id: p.id, ...who, reason });
     await notifyOwner(
       `Partner reported: ${p.full_name}`,

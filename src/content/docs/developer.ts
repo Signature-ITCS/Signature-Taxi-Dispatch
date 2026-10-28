@@ -79,7 +79,6 @@ Signing in at \`/login\` then takes you to \`/master\`.`,
 - \`NEXT_PUBLIC_SITE_URL\` — your platform address, e.g. \`https://booking.airport-transfer.uk\`.
 - \`GOOGLE_MAPS_API_KEY\` — **secret**; enable **Places API (New)** and **Routes API**; restrict by API, not by website; set a daily quota and a budget alert.
 - \`CRON_SECRET\` — **secret**, any long random string (daily job).
-- \`NEXT_PUBLIC_TURNSTILE_SITE_KEY\` and \`TURNSTILE_SECRET_KEY\` (**secret**) — optional Cloudflare Turnstile "are you human?" check on sign-up, sign-in, forgot password and partner applications (Cloudflare → Turnstile → Add widget). For sign-in, also switch on **Supabase → Authentication → Attack Protection → CAPTCHA** with the same secret.
 - \`NEXT_PUBLIC_VAPID_PUBLIC_KEY\`, \`VAPID_PRIVATE_KEY\` (**secret**), \`VAPID_SUBJECT\` — push notifications (\`npx web-push generate-vapid-keys\`).
 
 Redeploy after changing them. Everything else (your Resend key) is set in the master dashboard.`,

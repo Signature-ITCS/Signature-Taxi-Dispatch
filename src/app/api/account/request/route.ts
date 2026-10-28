@@ -3,7 +3,7 @@ import { getStaffContext, audit } from "@/lib/tenant";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getServices } from "@/lib/services";
 import { notifyOwner, siteOrigin } from "@/lib/provision";
-import { clientIp, rateLimitShared } from "@/lib/rateLimit";
+import { rateLimit, clientIp } from "@/lib/rateLimit";
 
 /**
  * A company asks the platform for paid help:
@@ -13,7 +13,7 @@ import { clientIp, rateLimitShared } from "@/lib/rateLimit";
  * payment link by hand and marks the request paid in Master → Requests.
  */
 export async function POST(req: Request) {
-  if (!(await rateLimitShared(`help-request:${clientIp(req)}`, 10, 60 * 60_000))) {
+  if (!rateLimit(`help-request:${clientIp(req)}`, 10, 60 * 60_000)) {
     return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
   }
   const ctx = await getStaffContext();

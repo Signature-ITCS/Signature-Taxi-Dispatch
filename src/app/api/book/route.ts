@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getOfficeContext, websiteForRequest } from "@/lib/tenant";
-import { clientIp, rateLimitShared } from "@/lib/rateLimit";
+import { rateLimit, clientIp } from "@/lib/rateLimit";
 import { splitFare } from "@/lib/fare";
 import {
   normalizeBookingInput,
@@ -23,7 +23,7 @@ import {
 export async function POST(req: Request) {
   // Throttle: booking sends an SMS + emails to client-supplied addresses and hits
   // Google — cap per IP so it can't be scripted to bomb numbers or run up bills.
-  if (!(await rateLimitShared(`book:${clientIp(req)}`, 15, 60_000))) {
+  if (!rateLimit(`book:${clientIp(req)}`, 15, 60_000)) {
     return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
   }
 

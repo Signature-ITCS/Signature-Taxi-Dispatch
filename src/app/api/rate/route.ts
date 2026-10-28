@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { callRpc } from "@/lib/supabaseRest";
-import { clientIp, rateLimitShared } from "@/lib/rateLimit";
+import { rateLimit, clientIp } from "@/lib/rateLimit";
 
 export async function POST(req: Request) {
-  if (!(await rateLimitShared(`rate:${clientIp(req)}`, 10, 60_000))) {
+  if (!rateLimit(`rate:${clientIp(req)}`, 10, 60_000)) {
     return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
   }
   const b = await req.json().catch(() => ({}));

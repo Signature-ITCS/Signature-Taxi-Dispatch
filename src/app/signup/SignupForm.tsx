@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
-import Turnstile, { turnstileEnabled, type TurnstileHandle } from "@/components/Turnstile";
 
 interface PlanOption {
   code: string;
@@ -17,7 +16,6 @@ const ERRORS: Record<string, string> = {
   email_in_use: "That email already has an account. Sign in instead, or use another email.",
   unknown_plan: "Choose a plan.",
   rate_limited: "Too many attempts. Try again in a little while.",
-  robot_check: "The \"are you human?\" check didn't pass — please try again.",
   invalid_phone: "Enter a valid mobile / WhatsApp number — we send your invoices there.",
   create_failed: "We couldn't create your account. Please try again, or get in touch with us.",
 };
@@ -36,8 +34,6 @@ export default function SignupForm({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [token, setToken] = useState("");
-  const robot = useRef<TurnstileHandle>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const chosen = plans.find((p) => p.code === plan);
@@ -48,12 +44,11 @@ export default function SignupForm({
     if (company.trim().length < 2 || name.trim().length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       return setError(ERRORS.missing_fields);
     }
-    if (turnstileEnabled && !token) return setError("Please complete the check above the button.");
     setBusy(true);
     const res = await fetch("/api/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan, company_name: company, full_name: name, email, phone, turnstile: token }),
+      body: JSON.stringify({ plan, company_name: company, full_name: name, email, phone }),
     }).catch(() => null);
     const data = res ? await res.json().catch(() => null) : null;
     if (data?.ok && data.url) {
@@ -61,7 +56,6 @@ export default function SignupForm({
       return;
     }
     setBusy(false);
-    robot.current?.reset();
     setError(ERRORS[data?.error as string] ?? "Something went wrong. Please try again.");
   };
 
@@ -114,7 +108,6 @@ export default function SignupForm({
           className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 outline-none focus:border-brand-500" />
       </label>
 
-      <Turnstile ref={robot} onToken={setToken} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button disabled={busy}
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white disabled:opacity-60">

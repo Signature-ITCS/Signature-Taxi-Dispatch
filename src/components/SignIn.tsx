@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Mail, Lock, Loader2, LogIn, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/Brand";
 import { createClient } from "@/lib/supabase/client";
 import { logActivity } from "@/lib/activity";
-import Turnstile, { turnstileEnabled, type TurnstileHandle } from "@/components/Turnstile";
 
 function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
   const router = useRouter();
@@ -19,8 +18,6 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"password" | "code">("password");
-  const [token, setToken] = useState("");
-  const robot = useRef<TurnstileHandle>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const need = params.get("need");
@@ -84,16 +81,10 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    if (turnstileEnabled && !token) {
-      setLoading(false);
-      setError("Please complete the check above the button.");
-      return;
-    }
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password, options: token ? { captchaToken: token } : undefined });
-    robot.current?.reset();
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error || !data.user) {
       setLoading(false);
-      setError(/captcha/i.test(error?.message ?? "") ? "The \"are you human?\" check didn't pass — please try again." : "Invalid email or password.");
+      setError("Invalid email or password.");
       return;
     }
     setPassword("");
@@ -211,7 +202,6 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
             />
           </div>
 
-          <Turnstile ref={robot} onToken={setToken} />
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <button

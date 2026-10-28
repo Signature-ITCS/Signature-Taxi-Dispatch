@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { clientIp, rateLimitShared } from "@/lib/rateLimit";
+import { rateLimit, clientIp } from "@/lib/rateLimit";
 import { siteOrigin, isOwnerEmail, provisionCompany } from "@/lib/provision";
 import { isValidPhone } from "@/lib/format";
-import { verifyTurnstile } from "@/lib/turnstile";
 
 /**
  * A new company signs up. No payment is taken: the company is saved as
@@ -15,7 +14,7 @@ import { verifyTurnstile } from "@/lib/turnstile";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: Request) {
-  if (!(await rateLimitShared(`signup:${clientIp(req)}`, 10, 60 * 60_000))) {
+  if (!rateLimit(`signup:${clientIp(req)}`, 10, 60 * 60_000)) {
     return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
   }
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -28,7 +27,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "missing_fields" });
   }
   if (!isValidPhone(phone)) return NextResponse.json({ ok: false, error: "invalid_phone" });
-  if (!(await verifyTurnstile(b.turnstile, clientIp(req)))) return NextResponse.json({ ok: false, error: "robot_check" });
 
   const admin = createAdminClient();
   const { data: plan } = await admin

@@ -1,23 +1,21 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { clientIp, rateLimitShared } from "@/lib/rateLimit";
+import { rateLimit, clientIp } from "@/lib/rateLimit";
 import { sendPasswordLink, siteOrigin } from "@/lib/provision";
 import { getPlatformName } from "@/lib/companyBrand";
-import { verifyTurnstile } from "@/lib/turnstile";
 
 /**
  * Email a password-reset link. Always answers the same, whether or not the
  * address has an account, so it can't be used to find out who has one.
  */
 export async function POST(req: Request) {
-  if (!(await rateLimitShared(`forgot:${clientIp(req)}`, 5, 15 * 60_000))) {
+  if (!rateLimit(`forgot:${clientIp(req)}`, 5, 15 * 60_000)) {
     return NextResponse.json({ ok: true });
   }
-  const { email, turnstile } = (await req.json().catch(() => ({}))) as { email?: string; turnstile?: string };
-  if (!(await verifyTurnstile(turnstile, clientIp(req)))) return NextResponse.json({ ok: false, error: "robot_check" });
+  const { email } = (await req.json().catch(() => ({}))) as { email?: string };
   const clean = String(email ?? "").trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return NextResponse.json({ ok: true });
-  if (!(await rateLimitShared(`forgot-email:${clean}`, 3, 60 * 60_000))) return NextResponse.json({ ok: true });
+  if (!rateLimit(`forgot-email:${clean}`, 3, 60 * 60_000)) return NextResponse.json({ ok: true });
 
   try {
     const admin = createAdminClient();

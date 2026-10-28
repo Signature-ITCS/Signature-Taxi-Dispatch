@@ -34,26 +34,3 @@ export function clientIp(req: Request): string {
   return req.headers.get("x-real-ip") || "unknown";
 }
 
-/**
- * The same limit, shared by every server: counted in the database
- * (hit_rate_limit, db/2026-10-29_rate_limits.sql), after this server's own
- * in-memory check. Use it for anything a bot would hammer — sign-ups,
- * applications, password resets, bookings, paid look-ups. If the database
- * can't be reached the in-memory result stands, so a hiccup never locks
- * real people out. Server-only.
- */
-export async function rateLimitShared(key: string, limit: number, windowMs: number): Promise<boolean> {
-  if (!rateLimit(key, limit, windowMs)) return false;
-  try {
-    const { createAdminClient } = await import("@/lib/supabase/admin");
-    const { data, error } = await createAdminClient().rpc("hit_rate_limit", {
-      p_key: key,
-      p_limit: limit,
-      p_window_seconds: Math.max(1, Math.round(windowMs / 1000)),
-    });
-    if (error) return true;
-    return data !== false;
-  } catch {
-    return true;
-  }
-}
