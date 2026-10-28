@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Mail, Lock, Loader2, LogIn, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/Brand";
 import { createClient } from "@/lib/supabase/client";
 import { logActivity } from "@/lib/activity";
+import Turnstile, { turnstileEnabled, type TurnstileHandle } from "@/components/Turnstile";
 
 function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
   const router = useRouter();
@@ -18,9 +19,12 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"password" | "code">("password");
+  const [token, setToken] = useState("");
+  const robot = useRef<TurnstileHandle>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const need = params.get("need");
+  const idle = params.get("idle");
 
   /**
    * Signed in with a password: ask the server what is still owed for
@@ -80,10 +84,16 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (turnstileEnabled && !token) {
+      setLoading(false);
+      setError("Please complete the check above the button.");
+      return;
+    }
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password, options: token ? { captchaToken: token } : undefined });
+    robot.current?.reset();
     if (error || !data.user) {
       setLoading(false);
-      setError("Invalid email or password.");
+      setError(/captcha/i.test(error?.message ?? "") ? "The \"are you human?\" check didn't pass — please try again." : "Invalid email or password.");
       return;
     }
     setPassword("");
@@ -131,6 +141,12 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
           <h1 className="font-display text-2xl font-bold text-ink-950">{title}</h1>
           <p className="mt-1 text-sm text-gray-500">{subtitle}</p>
         </div>
+
+        {idle && (
+          <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
+            You were signed out because the screen was left without activity. Please sign in again.
+          </div>
+        )}
 
         {need && (
           <div className="mb-4 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-800">
@@ -195,6 +211,7 @@ function LoginForm({ title, subtitle }: { title: string; subtitle: string }) {
             />
           </div>
 
+          <Turnstile ref={robot} onToken={setToken} />
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <button

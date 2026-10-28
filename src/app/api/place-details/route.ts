@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { rateLimit, clientIp } from "@/lib/rateLimit";
+import { clientIp, rateLimitShared } from "@/lib/rateLimit";
 import { serverMapsKey } from "@/lib/googleKey";
 
 type Details = { address: string | null; lat: number | null; lng: number | null };
@@ -11,7 +11,7 @@ type Details = { address: string | null; lat: number | null; lng: number | null 
  * work in both, so whichever API the key is allowed to use answers.
  */
 export async function POST(req: Request) {
-  if (!rateLimit(`place-details:${clientIp(req)}`, 60, 60_000)) {
+  if (!(await rateLimitShared(`place-details:${clientIp(req)}`, 60, 60_000))) {
     return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
   }
   const { place_id } = await req.json().catch(() => ({ place_id: "" }));

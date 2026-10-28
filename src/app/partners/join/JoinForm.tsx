@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import Turnstile, { turnstileEnabled, type TurnstileHandle } from "@/components/Turnstile";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
 const ERRORS: Record<string, string> = {
@@ -11,6 +12,7 @@ const ERRORS: Record<string, string> = {
   consent_needed: "Please tick the box to agree.",
   email_in_use: "That email already has an account or application.",
   rate_limited: "Too many attempts. Try again later.",
+  robot_check: "The \"are you human?\" check didn't pass — please try again.",
 };
 
 const field = "mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500";
@@ -23,6 +25,8 @@ export default function JoinForm({ platformName, price, councils }: { platformNa
     areas: "", about: "",
   });
   const [consent, setConsent] = useState(false);
+  const [token, setToken] = useState("");
+  const robot = useRef<TurnstileHandle>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -30,14 +34,18 @@ export default function JoinForm({ platformName, price, councils }: { platformNa
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (turnstileEnabled && !token) return setError("Please complete the check above the button.");
     setBusy(true);
     setError(null);
-    const d = await fetch("/api/partners/join", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, consent }) })
+    const d = await fetch("/api/partners/join", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, consent, turnstile: token }) })
       .then((r) => r.json())
       .catch(() => null);
     setBusy(false);
     if (d?.ok) setDone(true);
-    else setError(ERRORS[d?.error] ?? "Something went wrong. Please try again.");
+    else {
+      robot.current?.reset();
+      setError(ERRORS[d?.error] ?? "Something went wrong. Please try again.");
+    }
   };
 
   if (done) {
@@ -127,6 +135,7 @@ export default function JoinForm({ platformName, price, councils }: { platformNa
         </span>
       </label>
 
+      <Turnstile ref={robot} onToken={setToken} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white disabled:opacity-60">
         {busy && <Loader2 className="h-4 w-4 animate-spin" />} Send application

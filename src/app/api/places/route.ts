@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { rateLimit, clientIp } from "@/lib/rateLimit";
+import { clientIp, rateLimitShared } from "@/lib/rateLimit";
 import { serverMapsKey } from "@/lib/googleKey";
 
 type Prediction = { description: string; place_id: string };
@@ -12,7 +12,7 @@ type Prediction = { description: string; place_id: string };
  * to the legacy endpoint — whichever one the key is allowed to use answers.
  */
 export async function POST(req: Request) {
-  if (!rateLimit(`places:${clientIp(req)}`, 60, 60_000)) {
+  if (!(await rateLimitShared(`places:${clientIp(req)}`, 60, 60_000))) {
     return NextResponse.json({ predictions: [] }, { status: 429 });
   }
   const { input } = await req.json().catch(() => ({ input: "" }));

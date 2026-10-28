@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { priceTrip } from "@/lib/pricing";
 import { quoteSignature } from "@/lib/quoteSignature";
 import { normalizeBookingInput, validateBookingInput, categoryBookable, type BookingInput } from "@/lib/bookingFlow";
-import { rateLimit, clientIp } from "@/lib/rateLimit";
+import { clientIp, rateLimitShared } from "@/lib/rateLimit";
 import { cardPaymentsEnabled } from "@/lib/paymentMethods";
 import { draftCookieValue } from "@/lib/draftCookie";
 
@@ -21,7 +21,7 @@ import { draftCookieValue } from "@/lib/draftCookie";
 export async function POST(req: Request) {
   // Each call prices the trip (Google Directions) and opens a live Stripe
   // session — cap per IP so it can't be scripted to run up bills.
-  if (!rateLimit(`checkout:${clientIp(req)}`, 20, 60_000)) {
+  if (!(await rateLimitShared(`checkout:${clientIp(req)}`, 20, 60_000))) {
     return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
   }
 

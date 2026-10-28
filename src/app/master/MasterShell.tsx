@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import IdleSignOut from "@/components/IdleSignOut";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, Building2, Tags, LifeBuoy, Settings, ScrollText, LogOut, Crown, BookOpen, Receipt, ShieldCheck, Handshake } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -27,6 +28,7 @@ export default function MasterShell({ platformName, email, children }: { platfor
   };
   return (
     <div className="min-h-screen bg-gray-50 md:flex">
+      <IdleSignOut minutes={30} />
       <aside className="border-b border-gray-200 bg-ink-950 text-white md:fixed md:inset-y-0 md:w-60 md:border-b-0">
         <div className="flex items-center gap-2.5 px-5 py-5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">

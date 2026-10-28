@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { rateLimit, clientIp } from "@/lib/rateLimit";
+import { clientIp, rateLimitShared } from "@/lib/rateLimit";
 import { isValidPhone } from "@/lib/format";
 import { isOwnerEmail, notifyOwner, siteOrigin } from "@/lib/provision";
+import { verifyTurnstile } from "@/lib/turnstile";
 
 /**
  * A driver or sole-trader operator applies to join the partner network.
@@ -14,7 +15,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const str = (v: unknown, max = 120) => String(v ?? "").trim().slice(0, max);
 
 export async function POST(req: Request) {
-  if (!rateLimit(`partner-join:${clientIp(req)}`, 5, 60 * 60_000)) {
+  if (!(await rateLimitShared(`partner-join:${clientIp(req)}`, 5, 60 * 60_000))) {
     return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
   }
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -42,6 +43,7 @@ export async function POST(req: Request) {
     about: str(b.about, 600) || null,
   };
   if (b.consent !== true) return NextResponse.json({ ok: false, error: "consent_needed" });
+  if (!(await verifyTurnstile(b.turnstile, clientIp(req)))) return NextResponse.json({ ok: false, error: "robot_check" });
   if (row.full_name.length < 2 || !EMAIL_RE.test(row.email) || !row.council || !row.badge_number || !row.areas) {
     return NextResponse.json({ ok: false, error: "missing_fields" });
   }

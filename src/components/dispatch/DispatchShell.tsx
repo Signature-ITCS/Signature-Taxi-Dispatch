@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import IdleSignOut from "@/components/IdleSignOut";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Radio, ClipboardList, CarFront, Users, LogOut, Map as MapIcon, CalendarDays, BookOpen, ShieldCheck, Handshake } from "lucide-react";
@@ -43,6 +44,7 @@ export default function DispatchShell({
 
   return (
     <div className="flex min-h-screen bg-gray-50">
+      <IdleSignOut minutes={720} />
       {/* Sidebar — tablet / desktop */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-gray-200 bg-white md:flex">
         <div className="flex items-center gap-2.5 px-5 py-5">

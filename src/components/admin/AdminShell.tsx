@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import IdleSignOut from "@/components/IdleSignOut";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
@@ -76,6 +77,7 @@ export default function AdminShell({
 
   return (
     <div className="flex min-h-screen bg-gray-50">
+      <IdleSignOut minutes={120} />
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r border-gray-200 bg-white md:flex print:hidden">
         <div className="flex items-center gap-2.5 px-5 py-5">

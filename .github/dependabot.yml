@@ -1,0 +1,16 @@
+# Dependabot: GitHub opens a pull request when a library this app uses has a
+# security fix (and a weekly batch of ordinary updates). Review and merge them;
+# Vercel deploys main as usual.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # One pull request for all minor/patch updates, so they're easy to review.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    labels: ["dependencies"]

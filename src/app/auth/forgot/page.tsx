@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
+import Turnstile, { turnstileEnabled, type TurnstileHandle } from "@/components/Turnstile";
 import { useSearchParams } from "next/navigation";
 import { Loader2, MailCheck } from "lucide-react";
 
@@ -20,18 +21,27 @@ function Forgot() {
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState("");
+  const robot = useRef<TurnstileHandle>(null);
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Enter your email address.");
+    if (turnstileEnabled && !token) return setError("Please complete the check below.");
     setBusy(true);
     setError(null);
-    await fetch("/api/auth/forgot", {
+    const d = await fetch("/api/auth/forgot", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim() }),
-    }).catch(() => null);
+      body: JSON.stringify({ email: email.trim(), turnstile: token }),
+    })
+      .then((r) => r.json())
+      .catch(() => null);
     setBusy(false);
+    if (d?.error === "robot_check") {
+      robot.current?.reset();
+      return setError("The check didn't pass — please try again.");
+    }
     // Same answer whether or not the address has an account.
     setSent(true);
   };
@@ -63,6 +73,7 @@ function Forgot() {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500"
             />
+            <Turnstile ref={robot} onToken={setToken} />
             {error && <p className="text-sm text-red-600">{error}</p>}
             <button
               disabled={busy}
