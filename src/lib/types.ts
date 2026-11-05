@@ -213,6 +213,8 @@ export interface PricingRule {
   sort_order: number;
   /** Comma-separated words; the charge is skipped when any appears in the addresses (db/2026-10-23_charge_exclusions.sql). */
   exclude_keywords?: string | null;
+  /** Area charge: pricing_zones ids — applies when the pickup or drop-off is in any (db/2026-11-03_area_charges.sql). */
+  zone_ids?: string[] | null;
 }
 
 export interface Profile {

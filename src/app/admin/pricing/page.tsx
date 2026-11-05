@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Loader2, Save, Plus, Trash2, Check, X, Pencil, Percent, PoundSterling, Users, Luggage, Backpack, Baby, Layers, Calculator, AlertTriangle } from "lucide-react";
+import { Loader2, Save, Plus, Trash2, Check, X, Pencil, Percent, PoundSterling, Users, Luggage, Backpack, Baby, Layers, Calculator, AlertTriangle, MapPin } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PageHeader from "@/components/admin/PageHeader";
 import HelpLink from "@/components/docs/HelpLink";
@@ -24,15 +24,23 @@ export default function PricingPage() {
   const [savedCsp, setSavedCsp] = useState(false);
   // "Don't apply when the address contains …" needs db/2026-10-23_charge_exclusions.sql.
   const [hasExclusions, setHasExclusions] = useState(false);
+  // Area charges need db/2026-11-03_area_charges.sql.
+  const [hasAreas, setHasAreas] = useState(false);
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [areaEdit, setAreaEdit] = useState<string | null>(null);
 
   const load = async () => {
-    const [{ data: c }, { data: r }, { data: setting }, probe] = await Promise.all([
+    const [{ data: c }, { data: r }, { data: setting }, probe, areaProbe, { data: z }] = await Promise.all([
       supabase.from("vehicle_categories").select("*").order("sort_order"),
       supabase.from("pricing_rules").select("*").order("sort_order"),
       supabase.from("app_settings").select("value").eq("key", "child_seat_price").maybeSingle(),
       supabase.from("pricing_rules").select("exclude_keywords").limit(1),
+      supabase.from("pricing_rules").select("zone_ids").limit(1),
+      supabase.from("pricing_zones").select("id, name, color, is_active").order("sort_order").order("created_at"),
     ]);
     setHasExclusions(!probe.error);
+    setHasAreas(!areaProbe.error);
+    setZones((z as Zone[]) ?? []);
     setCats((c as VehicleCategory[]) ?? []);
     setRules((r as PricingRule[]) ?? []);
     setChildSeatPrice(Number((setting?.value as { amount?: number } | null)?.amount) || 0);
@@ -109,6 +117,14 @@ export default function PricingPage() {
       .join(", ");
     await supabase.from("pricing_rules").update({ exclude_keywords: value || null }).eq("id", r.id);
     await logActivity(supabase, "pricing_updated", `Extra charge ${r.name}: not for "${value || "—"}"`);
+    load();
+  };
+  const saveAreas = async (r: PricingRule, ids: string[]) => {
+    const { error } = await supabase.from("pricing_rules").update({ zone_ids: ids }).eq("id", r.id);
+    if (error) return alert("Could not save the areas. Please try again.");
+    const names = zones.filter((z) => ids.includes(z.id)).map((z) => z.name).join(", ");
+    await logActivity(supabase, "pricing_updated", `Extra charge ${r.name}: ${ids.length ? `areas ${names}` : "no areas"}`);
+    setAreaEdit(null);
     load();
   };
   const deleteRule = async (id: string) => {
@@ -269,7 +285,8 @@ export default function PricingPage() {
             </div>
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
               {rules.map((r) => (
-                <div key={r.id} className="flex items-center justify-between border-b border-gray-50 px-5 py-3.5 last:border-0">
+                <div key={r.id} className="border-b border-gray-50 last:border-0">
+                <div className="flex items-center justify-between px-5 py-3.5">
                   <div className="flex items-center gap-3">
                     <span className={cn("flex h-9 w-9 items-center justify-center rounded-lg", r.charge_type === "percentage" ? "bg-violet-50 text-violet-600" : "bg-brand-50 text-brand-600")}>
                       {r.charge_type === "percentage" ? <Percent className="h-[18px] w-[18px]" /> : <PoundSterling className="h-[18px] w-[18px]" />}
@@ -278,9 +295,15 @@ export default function PricingPage() {
                       <p className="text-sm font-semibold text-ink-950">{r.name}</p>
                       <p className="text-xs text-gray-400">
                         {r.charge_type === "percentage" ? `+${r.amount}%` : `+£${Number(r.amount).toFixed(2)}`}
-                        {r.keyword && ` · matches "${r.keyword}"`}
-                        {r.start_time && ` · ${r.start_time.slice(0, 5)}–${r.end_time?.slice(0, 5)} (pickup time)`}
-                        {r.applies_all && " · every journey"}
+                        {(r.zone_ids?.length ?? 0) > 0 ? (
+                          ` · pickup or drop-off in ${zoneNames(zones, r.zone_ids!)}`
+                        ) : (
+                          <>
+                            {r.keyword && ` · matches "${r.keyword}"`}
+                            {r.start_time && ` · ${r.start_time.slice(0, 5)}–${r.end_time?.slice(0, 5)} (pickup time)`}
+                            {r.applies_all && " · every journey"}
+                          </>
+                        )}
                       </p>
                       {r.exclude_keywords && (
                         <p className="text-xs font-medium text-amber-700">Not for addresses with: {r.exclude_keywords}</p>
@@ -288,6 +311,18 @@ export default function PricingPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {hasAreas && (
+                      <button
+                        onClick={() => setAreaEdit(areaEdit === r.id ? null : r.id)}
+                        title="Choose the areas this charge applies to"
+                        className={cn(
+                          "rounded-lg p-2 hover:bg-gray-100 hover:text-ink-950",
+                          (r.zone_ids?.length ?? 0) > 0 ? "text-brand-500" : "text-gray-300"
+                        )}
+                      >
+                        <MapPin className="h-4 w-4" />
+                      </button>
+                    )}
                     {hasExclusions && (
                       <button
                         onClick={() => editExclusions(r)}
@@ -316,8 +351,24 @@ export default function PricingPage() {
                     </button>
                   </div>
                 </div>
+                {areaEdit === r.id && (
+                  <div className="bg-gray-50 px-5 pb-4 pt-1">
+                    <AreaPicker
+                      zones={zones}
+                      initial={r.zone_ids ?? []}
+                      onCancel={() => setAreaEdit(null)}
+                      onSave={(ids) => saveAreas(r, ids)}
+                      note={
+                        r.keyword || r.start_time || r.applies_all
+                          ? "With areas ticked, this charge applies when the pickup or drop-off is in one of them, instead of its current condition."
+                          : undefined
+                      }
+                    />
+                  </div>
+                )}
+                </div>
               ))}
-              <AddRule onAdded={load} hasExclusions={hasExclusions} />
+              <AddRule onAdded={load} hasExclusions={hasExclusions} hasAreas={hasAreas} zones={zones} />
             </div>
           </section>
         </div>
@@ -712,7 +763,7 @@ function FareCalculator({ cats }: { cats: VehicleCategory[] }) {
 
 const AIRPORT_WORDS = "airport, heathrow, gatwick, stansted";
 
-function AddRule({ onAdded, hasExclusions }: { onAdded: () => void; hasExclusions: boolean }) {
+function AddRule({ onAdded, hasExclusions, hasAreas, zones }: { onAdded: () => void; hasExclusions: boolean; hasAreas: boolean; zones: Zone[] }) {
   const supabase = createClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -721,12 +772,13 @@ function AddRule({ onAdded, hasExclusions }: { onAdded: () => void; hasExclusion
   const [keyword, setKeyword] = useState("");
   // When the charge applies. One condition per charge: the pricing engine treats
   // a keyword and a time window as either/or, so the form never sets both.
-  const [when, setWhen] = useState<"keyword" | "time" | "always">("keyword");
+  const [when, setWhen] = useState<When>(hasAreas ? "area" : "keyword");
+  const [areaIds, setAreaIds] = useState<string[]>([]);
   const [from, setFrom] = useState("23:00");
   const [to, setTo] = useState("06:00");
   // Skip the charge when the addresses contain any of these words.
   const [exclude, setExclude] = useState("");
-  const pickWhen = (w: "keyword" | "time" | "always") => {
+  const pickWhen = (w: When) => {
     setWhen(w);
     // A night rate usually shouldn't hit airport runs — suggest it, editable.
     if (w === "time" && !exclude) setExclude(AIRPORT_WORDS);
@@ -737,6 +789,7 @@ function AddRule({ onAdded, hasExclusions }: { onAdded: () => void; hasExclusion
   const add = async () => {
     if (!name.trim() || !amount) return setErr("Enter a name and an amount.");
     if (when === "keyword" && !keyword.trim()) return setErr("Enter the address keyword (e.g. airport).");
+    if (when === "area" && areaIds.length === 0) return setErr("Tick at least one area.");
     if (when === "time" && (!from || !to || from === to)) return setErr("Choose a start and an end time.");
     setErr(null);
     setSaving(true);
@@ -748,6 +801,7 @@ function AddRule({ onAdded, hasExclusions }: { onAdded: () => void; hasExclusion
       start_time: when === "time" ? from : null,
       end_time: when === "time" ? to : null,
       applies_all: when === "always",
+      ...(hasAreas ? { zone_ids: when === "area" ? areaIds : [] } : {}),
       is_active: true,
       ...(hasExclusions
         ? {
@@ -765,12 +819,13 @@ function AddRule({ onAdded, hasExclusions }: { onAdded: () => void; hasExclusion
     await logActivity(
       supabase,
       "pricing_updated",
-      `Added extra charge ${name.trim()} (${type === "percentage" ? `+${amount}%` : `+£${amount}`}${when === "time" ? `, ${from}–${to}` : when === "keyword" ? `, "${keyword.trim()}"` : ", every journey"})`
+      `Added extra charge ${name.trim()} (${type === "percentage" ? `+${amount}%` : `+£${amount}`}${when === "time" ? `, ${from}–${to}` : when === "keyword" ? `, "${keyword.trim()}"` : when === "area" ? `, areas ${zoneNames(zones, areaIds)}` : ", every journey"})`
     );
     setName("");
     setAmount("");
     setKeyword("");
-    setWhen("keyword");
+    setWhen(hasAreas ? "area" : "keyword");
+    setAreaIds([]);
     setExclude("");
     setOpen(false);
     onAdded();
@@ -815,14 +870,20 @@ function AddRule({ onAdded, hasExclusions }: { onAdded: () => void; hasExclusion
           <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">When does it apply?</span>
           <select
             value={when}
-            onChange={(e) => pickWhen(e.target.value as "keyword" | "time" | "always")}
+            onChange={(e) => pickWhen(e.target.value as When)}
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400"
           >
+            {hasAreas && <option value="area">When the pickup or drop-off is in an area (e.g. Heathrow)</option>}
             <option value="keyword">When the address contains a word (e.g. airport)</option>
             <option value="time">Between two times (e.g. night rate)</option>
             <option value="always">Every journey</option>
           </select>
         </label>
+        {when === "area" && (
+          <div className="col-span-2">
+            <AreaChecklist zones={zones} value={areaIds} onChange={setAreaIds} />
+          </div>
+        )}
         {when === "keyword" && (
           <input
             value={keyword}
@@ -867,6 +928,84 @@ function AddRule({ onAdded, hasExclusions }: { onAdded: () => void; hasExclusion
         </button>
         <button onClick={() => setOpen(false)} className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-300">
           <X className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+type When = "area" | "keyword" | "time" | "always";
+type Zone = { id: string; name: string; color: string; is_active: boolean };
+
+const zoneNames = (zones: Zone[], ids: string[]) =>
+  ids.map((id) => zones.find((z) => z.id === id)?.name ?? "deleted area").join(", ");
+
+/** Tick-list of the areas drawn under "Fixed prices between areas". */
+function AreaChecklist({ zones, value, onChange }: { zones: Zone[]; value: string[]; onChange: (ids: string[]) => void }) {
+  if (zones.length === 0) {
+    return (
+      <p className="rounded-lg border border-dashed border-gray-300 bg-white p-3 text-xs text-gray-500">
+        No areas yet. Draw one first under <b>Fixed prices between areas</b> (e.g. around Heathrow), then come back.
+      </p>
+    );
+  }
+  const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
+  return (
+    <div>
+      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+        Areas (pickup or drop-off inside any of them)
+      </span>
+      <div className="flex flex-wrap gap-2">
+        {zones.map((z) => {
+          const on = value.includes(z.id);
+          return (
+            <button
+              key={z.id}
+              type="button"
+              onClick={() => toggle(z.id)}
+              aria-pressed={on}
+              className={cn(
+                "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                on ? "border-brand-500 bg-brand-50 text-ink-950" : "border-gray-200 bg-white text-gray-600 hover:border-gray-300",
+                !z.is_active && "opacity-60"
+              )}
+              title={z.is_active ? undefined : "This area is switched off, so the charge won't apply in it"}
+            >
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: z.color }} />
+              {z.name}
+              {on && <Check className="h-3.5 w-3.5 text-brand-600" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AreaPicker({
+  zones,
+  initial,
+  onSave,
+  onCancel,
+  note,
+}: {
+  zones: Zone[];
+  initial: string[];
+  onSave: (ids: string[]) => void;
+  onCancel: () => void;
+  note?: string;
+}) {
+  const [ids, setIds] = useState<string[]>(initial);
+  return (
+    <div className="space-y-2.5">
+      <AreaChecklist zones={zones} value={ids} onChange={setIds} />
+      {note && ids.length > 0 && <p className="text-[11px] text-amber-700">{note}</p>}
+      <div className="flex gap-2">
+        <button onClick={() => onSave(ids)} className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">
+          <Check className="h-3.5 w-3.5" /> Save areas
+        </button>
+        <button onClick={onCancel} className="rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-300">
+          Cancel
         </button>
       </div>
     </div>
