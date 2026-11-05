@@ -1088,7 +1088,7 @@ function ManualBookingModal({ onClose }: { onClose: () => void }) {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         // overflow-clip (not hidden) so the sticky header with ✕ stays on screen while scrolling
-        className="min-h-full w-full overflow-clip bg-white shadow-xl sm:my-6 sm:min-h-0 sm:max-w-md sm:rounded-2xl"
+        className="min-h-full w-full overflow-clip bg-white shadow-xl sm:my-6 sm:min-h-0 sm:max-w-4xl sm:rounded-2xl"
       >
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-gray-100 bg-white px-4 py-3 sm:px-5 sm:py-4">
           <div>

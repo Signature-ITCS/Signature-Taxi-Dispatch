@@ -31,6 +31,7 @@ import {
   Minus,
 } from "lucide-react";
 import AddressAutocomplete, { type PlaceValue } from "@/components/booking/AddressAutocomplete";
+import CustomerHistory, { type PastJourney } from "@/components/booking/CustomerHistory";
 import RouteMap, { type RouteLeg } from "@/components/booking/RouteMap";
 import { carIcon } from "@/components/booking/CarIcon";
 import { money, isValidPhone } from "@/lib/format";
@@ -61,7 +62,16 @@ interface Journey {
   dropoff: PlaceValue;
   km: number | null;
   min: number | null;
+  /** Staff form: door / flat number Google left out, put in front of the address. */
+  pickupDoor?: string;
+  dropoffDoor?: string;
 }
+
+/** "Flat 2" + "10 High St, Sheerness" → "Flat 2, 10 High St, Sheerness". */
+const withDoor = (address: string, door?: string) => {
+  const d = (door ?? "").trim();
+  return d ? `${d}, ${address}` : address;
+};
 
 const empty: PlaceValue = { address: "", lat: null, lng: null };
 const emptyJourney: Journey = { pickup: empty, vias: [], dropoff: empty, km: null, min: null };
@@ -407,10 +417,10 @@ export default function BookingWidget({
   }, [pendingCategory, quotes]);
 
   const legPayload = (j: Journey, at: string | null) => ({
-    pickup_address: j.pickup.address,
+    pickup_address: withDoor(j.pickup.address, j.pickupDoor),
     pickup_lat: j.pickup.lat,
     pickup_lng: j.pickup.lng,
-    dropoff_address: j.dropoff.address,
+    dropoff_address: withDoor(j.dropoff.address, j.dropoffDoor),
     dropoff_lat: j.dropoff.lat,
     dropoff_lng: j.dropoff.lng,
     via_points: j.vias.map((v) => ({ address: v.address, lat: v.lat, lng: v.lng })),
@@ -538,7 +548,7 @@ export default function BookingWidget({
           : "flex min-h-screen items-center justify-center bg-gradient-to-b from-brand-50/50 to-white p-4"
       }
     >
-      <div className="mx-auto w-full max-w-md">
+      <div className={`mx-auto w-full ${manual && step === 0 && !result ? "max-w-4xl" : "max-w-md"}`}>
         {!manual && (
           <div className="mb-4 flex flex-col items-center gap-2 px-1">
             <Logo height={48} className="h-auto w-[230px] max-w-full" />
@@ -566,11 +576,25 @@ export default function BookingWidget({
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.25 }}
-                className="space-y-4"
+                className={manual ? "grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]" : "space-y-4"}
               >
+                <div className="space-y-4">
+                {manual && (
+                  <div>
+                    <div className="space-y-2.5">
+                      <h2 className="font-display text-xl font-bold text-ink-950">Caller</h2>
+                      <PhoneInput placeholder="Caller's mobile number" value={whatsapp} onChange={setWhatsapp} />
+                      {whatsapp.trim() && !phoneValid && (
+                        <p className="pl-1 text-xs text-red-500">Please enter a valid phone number.</p>
+                      )}
+                      <Field icon={User} placeholder="Name (optional)" value={name} onChange={setName} />
+                    </div>
+                  </div>
+                )}
+
                 <h2 className="font-display text-xl font-bold text-ink-950">Where to?</h2>
 
-                <JourneyFields journey={outbound} onChange={setOutbound} />
+                <JourneyFields journey={outbound} onChange={setOutbound} doors={manual} />
 
                 {outbound.km != null && (
                   <DistanceChip km={outbound.km} min={outbound.min} />
@@ -646,7 +670,7 @@ export default function BookingWidget({
                     className="space-y-4 rounded-2xl bg-gray-50 p-4"
                   >
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Return trip</p>
-                    <JourneyFields journey={ret} onChange={setRet} />
+                    <JourneyFields journey={ret} onChange={setRet} doors={manual} />
                     {ret.km != null && <DistanceChip km={ret.km} min={ret.min} />}
                     <label className="block">
                       <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -698,6 +722,30 @@ export default function BookingWidget({
                     </>
                   )}
                 </button>
+                </div>
+                {manual && (
+                  <aside className="lg:sticky lg:top-20 lg:max-h-[75vh] lg:overflow-y-auto">
+                    <div>
+                      <CustomerHistory
+                        phone={whatsapp}
+                        onCustomer={(c) => {
+                          if (!name.trim() && c.name) setName(c.name);
+                          if (!email.trim() && c.email) setEmail(c.email);
+                        }}
+                        onTrip={(j: PastJourney, reversed: boolean) =>
+                          setOutbound({
+                            pickup: reversed ? j.dropoff : j.pickup,
+                            dropoff: reversed ? j.pickup : j.dropoff,
+                            vias: reversed ? [...j.vias].reverse() : j.vias,
+                            km: null,
+                            min: null,
+                          })
+                        }
+                        onPlace={(which, p) => setOutbound({ ...outbound, [which]: p, [which === "pickup" ? "pickupDoor" : "dropoffDoor"]: "", km: null, min: null })}
+                      />
+                    </div>
+                  </aside>
+                )}
               </motion.div>
             ) : step === 1 ? (
               <motion.div
@@ -1135,7 +1183,17 @@ function Stepper({ step }: { step: number }) {
   );
 }
 
-function JourneyFields({ journey, onChange }: { journey: Journey; onChange: (j: Journey) => void }) {
+function JourneyFields({ journey, onChange, doors = false }: { journey: Journey; onChange: (j: Journey) => void; doors?: boolean }) {
+  // A door / flat number doesn't move the map point, so the distance stays.
+  const doorInput = (key: "pickupDoor" | "dropoffDoor", label: string) =>
+    doors && (
+      <input
+        value={journey[key] ?? ""}
+        onChange={(e) => onChange({ ...journey, [key]: e.target.value.slice(0, 60) })}
+        placeholder={label}
+        className="ml-7 w-[calc(100%-1.75rem)] rounded-lg border border-dashed border-gray-200 px-3 py-1.5 text-sm outline-none placeholder:text-gray-400 focus:border-brand-400"
+      />
+    );
   const setPickup = (p: PlaceValue) => onChange({ ...journey, pickup: p, km: null, min: null });
   const setDropoff = (p: PlaceValue) => onChange({ ...journey, dropoff: p, km: null, min: null });
   const addVia = () => onChange({ ...journey, vias: [...journey.vias, empty], km: null, min: null });
@@ -1155,6 +1213,7 @@ function JourneyFields({ journey, onChange }: { journey: Journey; onChange: (j: 
         onChange={(a) => setPickup({ address: a, lat: null, lng: null })}
         onSelect={setPickup}
       />
+      {doorInput("pickupDoor", "Door / flat no. at pick-up (optional) — e.g. Flat 2, No. 14")}
 
       {journey.vias.map((v, i) => (
         <div key={i} className="relative">
@@ -1195,6 +1254,7 @@ function JourneyFields({ journey, onChange }: { journey: Journey; onChange: (j: 
         onChange={(a) => setDropoff({ address: a, lat: null, lng: null })}
         onSelect={setDropoff}
       />
+      {doorInput("dropoffDoor", "Door / flat no. at drop-off (optional)")}
     </div>
   );
 }
