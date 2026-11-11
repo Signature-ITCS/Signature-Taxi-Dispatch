@@ -35,7 +35,7 @@ import CustomerHistory, { type PastJourney } from "@/components/booking/Customer
 import { splitDoor, withDoor } from "@/lib/address";
 import RouteMap, { type RouteLeg } from "@/components/booking/RouteMap";
 import { carIcon } from "@/components/booking/CarIcon";
-import { money, isValidPhone } from "@/lib/format";
+import { money, isValidPhone, cn } from "@/lib/format";
 import { rememberCheckout, rememberedCheckout, forgetCheckout } from "@/lib/checkoutSession";
 import { useBrand } from "@/components/BrandProvider";
 import type { FareBreakdown, PaymentMethod } from "@/lib/types";
@@ -66,7 +66,15 @@ interface Journey {
   /** Staff form: door / flat number Google left out, put in front of the address. */
   pickupDoor?: string;
   dropoffDoor?: string;
+  /** Staff: the routes Google offers, and the one the dispatcher picked (null = Google's pick). */
+  routes?: RouteOpt[] | null;
+  route_label?: string | null;
+  route_km?: number | null;
+  /** The chosen route's line, for the map. */
+  polyline?: string | null;
 }
+
+type RouteOpt = { label: string; km: number; min: number; polyline: string | null; isDefault: boolean };
 
 
 const empty: PlaceValue = { address: "", lat: null, lng: null };
@@ -132,6 +140,18 @@ const journeyFrom = (leg: DraftLeg): Journey => ({
   min: leg.duration_min || null,
 });
 
+/**
+ * Store a measured route on a journey. A route the dispatcher picked earlier is
+ * kept when the new options still offer it; otherwise Google's pick is used.
+ */
+function withRoutes(j: Journey, r: { km: number; min: number; options?: RouteOpt[] }): Journey {
+  const options = r.options ?? null;
+  const kept = j.route_label && options ? options.find((o) => o.label === j.route_label) : undefined;
+  const def = options?.find((o) => o.isDefault) ?? options?.[0];
+  if (kept) return { ...j, routes: options, km: kept.km, min: kept.min, route_km: kept.km, polyline: kept.polyline };
+  return { ...j, routes: options, km: r.km, min: r.min, route_label: null, route_km: null, polyline: def?.polyline ?? null };
+}
+
 const allCoords = (j: Journey) =>
   j.pickup.lat != null && j.dropoff.lat != null && j.vias.every((v) => v.lat != null);
 
@@ -150,9 +170,10 @@ const priceLeg = (j: Journey, at: string | null) => ({
   dropoff_lat: j.dropoff.lat,
   dropoff_lng: j.dropoff.lng,
   via_points: j.vias.map((v) => ({ lat: v.lat, lng: v.lng })),
+  ...(j.route_label ? { route_label: j.route_label, route_km: j.route_km } : {}),
 });
 
-async function getRoute(j: Journey): Promise<{ km: number; min: number } | null> {
+async function getRoute(j: Journey, withOptions = false): Promise<{ km: number; min: number; options?: RouteOpt[] } | null> {
   try {
     const res = await fetch("/api/route", {
       method: "POST",
@@ -161,10 +182,11 @@ async function getRoute(j: Journey): Promise<{ km: number; min: number } | null>
         origin: { lat: j.pickup.lat, lng: j.pickup.lng },
         destination: { lat: j.dropoff.lat, lng: j.dropoff.lng },
         waypoints: j.vias.filter((v) => v.lat != null).map((v) => ({ lat: v.lat, lng: v.lng })),
+        ...(withOptions ? { options: true } : {}),
       }),
     });
     const d = await res.json();
-    return d.ok ? { km: d.km, min: d.min } : null;
+    return d.ok ? { km: d.km, min: d.min, options: d.options } : null;
   } catch {
     return null;
   }
@@ -346,21 +368,21 @@ export default function BookingWidget({
   useEffect(() => {
     if (allCoords(outbound) && outbound.km == null) {
       const id = ++outReqId.current;
-      getRoute(outbound).then((r) => {
-        if (r && id === outReqId.current) setOutbound((o) => ({ ...o, km: r.km, min: r.min }));
+      getRoute(outbound, manual).then((r) => {
+        if (r && id === outReqId.current) setOutbound((o) => withRoutes(o, r));
       });
     }
-  }, [outbound]);
+  }, [outbound, manual]);
 
   // Auto-compute distance for the return journey
   useEffect(() => {
     if (returnEnabled && allCoords(ret) && ret.km == null) {
       const id = ++retReqId.current;
-      getRoute(ret).then((r) => {
-        if (r && id === retReqId.current) setRet((o) => ({ ...o, km: r.km, min: r.min }));
+      getRoute(ret, manual).then((r) => {
+        if (r && id === retReqId.current) setRet((o) => withRoutes(o, r));
       });
     }
-  }, [returnEnabled, ret]);
+  }, [returnEnabled, ret, manual]);
 
   const toggleReturn = () => {
     if (!returnEnabled) {
@@ -457,6 +479,7 @@ export default function BookingWidget({
     duration_min: j.min,
     scheduled_at: at,
     route_text: routeText(j),
+    ...(j.route_label ? { route_label: j.route_label, route_km: j.route_km } : {}),
   });
 
   const bookingPayload = () => ({
@@ -618,6 +641,7 @@ export default function BookingWidget({
                 <h2 className="font-display text-xl font-bold text-ink-950">Where to?</h2>
 
                 <JourneyFields journey={outbound} onChange={setOutbound} doors={manual} />
+                {manual && <RoutePicker journey={outbound} onChange={setOutbound} />}
 
                 {outbound.km != null && (
                   <DistanceChip km={outbound.km} min={outbound.min} />
@@ -694,6 +718,7 @@ export default function BookingWidget({
                   >
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Return trip</p>
                     <JourneyFields journey={ret} onChange={setRet} doors={manual} />
+                    {manual && <RoutePicker journey={ret} onChange={setRet} />}
                     {ret.km != null && <DistanceChip km={ret.km} min={ret.min} />}
                     <label className="block">
                       <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -1129,6 +1154,55 @@ function Spec({
       <span className="font-bold text-ink-950">{value}</span>
       <span className="font-medium text-gray-400">{label}</span>
     </span>
+  );
+}
+
+/**
+ * Staff: choose which of Google's routes to price (e.g. the shortest instead of
+ * Google's fastest). The price is worked out on the server from the chosen
+ * route's miles. Shown only when Google offers more than one route.
+ */
+function RoutePicker({ journey, onChange }: { journey: Journey; onChange: (j: Journey) => void }) {
+  const opts = journey.routes ?? [];
+  if (opts.length < 2) return null;
+  const shortest = opts.reduce((a, b) => (b.km < a.km ? b : a));
+  const current = journey.route_label ? opts.find((o) => o.label === journey.route_label) : opts.find((o) => o.isDefault) ?? opts[0];
+  return (
+    <div className="rounded-xl border border-gray-200 p-3">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Route — the price uses the one you pick</p>
+      <div className="space-y-1.5">
+        {opts.map((o, i) => {
+          const on = current === o;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...journey,
+                  route_label: o.isDefault ? null : o.label,
+                  route_km: o.isDefault ? null : o.km,
+                  km: o.km,
+                  min: o.min,
+                  polyline: o.polyline,
+                })
+              }
+              className={cn(
+                "flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                on ? "border-brand-400 bg-brand-50 text-ink-950" : "border-gray-100 text-gray-600 hover:border-gray-200"
+              )}
+            >
+              <span className={cn("h-3.5 w-3.5 shrink-0 rounded-full border-2", on ? "border-brand-600 bg-brand-600" : "border-gray-300")} />
+              <span className="min-w-0 flex-1 truncate font-medium">via {o.label}</span>
+              <span className="shrink-0 tabular-nums">{o.km.toFixed(1)} mi</span>
+              <span className="w-14 shrink-0 text-right tabular-nums text-gray-400">{o.min} min</span>
+              {o === shortest && <span className="shrink-0 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">Shortest</span>}
+              {o.isDefault && <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">Google&apos;s pick</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

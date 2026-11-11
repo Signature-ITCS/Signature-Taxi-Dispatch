@@ -144,7 +144,7 @@ export async function createTrip(
   const tripGroupId = hasReturn ? randomUUID() : null;
 
   const createLeg = async (leg: Leg, isReturn: boolean): Promise<LegResult | null> => {
-    const resolved = await resolveLegDistance(leg, { trustClient: opts.trustClient });
+    const resolved = await resolveLegDistance(leg, { trustClient: opts.trustClient, allowRouteChoice: opts.trustClient });
     if (!resolved) return { ok: false, error: "no_route" };
     const { distance_km, duration_min } = resolved;
     const { data } = await callRpcCompat<LegResult>("create_booking", {
@@ -176,6 +176,17 @@ export async function createTrip(
       // Direct (no-stops) distance: a fixed area price adds the stops' extra miles.
       p_direct_km: resolved.direct_km,
     });
+    // The dispatcher chose a route: keep it with the booking (fare_breakdown.route)
+    // so the driver's navigation and the dispatch map follow the same roads.
+    const saved = data as (LegResult & { fare_breakdown?: Record<string, unknown> }) | null;
+    if (saved?.ok && saved.booking_id && resolved.route) {
+      const { error } = await createAdminClient()
+        .from("bookings")
+        .update({ fare_breakdown: { ...(saved.fare_breakdown ?? {}), route: resolved.route } })
+        .eq("id", saved.booking_id)
+        .eq("company_id", site.company_id);
+      if (error) console.error("[book] could not save the chosen route", error);
+    }
     return data;
   };
 

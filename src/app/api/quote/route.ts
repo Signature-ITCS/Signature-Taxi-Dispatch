@@ -22,12 +22,14 @@ interface Quote {
 
 async function legQuotes(
   key: string,
-  leg: QuoteLeg
+  leg: QuoteLeg,
+  allowRouteChoice = false
 ): Promise<{ quotes: Quote[]; child_seat_price: number } | null> {
   // Recompute distance from coordinates server-side so the quoted price
   // can't be lowered by a client that under-reports distance_km.
   // Public endpoint: coordinates or nothing. See resolveLegDistance().
-  const resolved = await resolveLegDistance(leg);
+  // Staff may price a route they picked from the options; the public never can.
+  const resolved = await resolveLegDistance(leg, { allowRouteChoice });
   if (!resolved) return null;
   const { distance_km, duration_min } = resolved;
   // Coordinates let the database spot fixed area-to-area prices.
@@ -63,11 +65,14 @@ export async function POST(req: Request) {
   if (!site) return NextResponse.json({ ok: false, error: "invalid_website" });
   const key = site.api_key;
 
-  const outboundRes = await legQuotes(key, b.outbound ?? {});
+  // A chosen route (dispatcher route picker) only counts for signed-in staff.
+  // (office: signed-in staff of an open company, past two-factor if they need it)
+  const staff = !!office;
+  const outboundRes = await legQuotes(key, b.outbound ?? {}, staff);
   if (!outboundRes) return NextResponse.json({ ok: false, error: "quote_failed" });
 
   const outbound = outboundRes.quotes;
-  const retRes = b.return ? await legQuotes(key, b.return) : null;
+  const retRes = b.return ? await legQuotes(key, b.return, staff) : null;
   const ret = retRes?.quotes ?? null;
 
   const quotes = outbound.map((q) => {

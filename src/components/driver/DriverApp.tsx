@@ -31,6 +31,7 @@ import { createClient } from "@/lib/supabase/client";
 import { LogoMark } from "@/components/Brand";
 import { useBrand } from "@/components/BrandProvider";
 import { money, cn } from "@/lib/format";
+import { navUrl, chosenRoute, dropoffWaypoints } from "@/lib/routeGuide";
 
 /* ── Types ────────────────────────────────────────────────────────────────── */
 
@@ -58,6 +59,8 @@ interface Job {
   dropoff_lat: number | null;
   dropoff_lng: number | null;
   via_points: { address: string; lat: number | null; lng: number | null }[] | null;
+  /** Includes .route when the dispatcher chose a route (see lib/routeGuide). */
+  fare_breakdown?: unknown;
   scheduled_at: string | null;
   passengers: number;
   suitcases: number;
@@ -75,7 +78,7 @@ const ACTIVE = ["accepted", "driver_arrived", "in_progress"] as const;
 /** Pre-booked jobs move from Scheduled to Jobs this long before pickup. */
 const LIVE_WINDOW_MS = 60 * 60_000;
 const JOB_FIELDS =
-  "id, booking_number, status, customer_name, customer_whatsapp, pickup_address, pickup_lat, pickup_lng, dropoff_address, dropoff_lat, dropoff_lng, via_points, scheduled_at, passengers, suitcases, hand_luggage, child_seat, notes, payment_method, payment_status, estimated_fare, final_fare, category:vehicle_categories!bookings_vehicle_category_id_fkey(name)";
+  "id, booking_number, status, customer_name, customer_whatsapp, pickup_address, pickup_lat, pickup_lng, dropoff_address, dropoff_lat, dropoff_lng, via_points, scheduled_at, passengers, suitcases, hand_luggage, child_seat, notes, payment_method, payment_status, estimated_fare, final_fare, fare_breakdown, category:vehicle_categories!bookings_vehicle_category_id_fkey(name)";
 
 /**
  * Location is sent at most every 30 s, and only when the driver has moved
@@ -111,10 +114,17 @@ const whenLabel = (iso: string | null) =>
     : "As soon as possible";
 
 /** Google Maps turn-by-turn to a point (opens the Maps app on phones). */
-const navUrl = (lat: number | null, lng: number | null, address: string) =>
-  `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${
-    lat != null && lng != null ? `${lat},${lng}` : encodeURIComponent(address)
-  }`;
+const navTo = (lat: number | null, lng: number | null, address: string) =>
+  navUrl(lat != null && lng != null ? { lat, lng } : null, address);
+
+/** To the drop-off: through every stop, along the route the dispatcher chose. */
+const navToDropoff = (job: Job) => {
+  const stops = (job.via_points ?? [])
+    .filter((v) => v?.lat != null && v?.lng != null)
+    .map((v) => ({ lat: v.lat as number, lng: v.lng as number }));
+  const dest = job.dropoff_lat != null && job.dropoff_lng != null ? { lat: job.dropoff_lat, lng: job.dropoff_lng } : null;
+  return navUrl(dest, job.dropoff_address, dropoffWaypoints(stops, chosenRoute(job.fare_breakdown)));
+};
 
 const urlB64ToUint8 = (b64: string) => {
   const pad = "=".repeat((4 - (b64.length % 4)) % 4);
@@ -526,7 +536,7 @@ export default function DriverApp() {
           {scheduled.map((job) => (
             <JobCard key={job.id} job={job} highlight={job.id === focusJob}>
               <div className="mt-3">
-                <LinkBtn icon={Navigation} href={navUrl(job.pickup_lat, job.pickup_lng, job.pickup_address)} label="See pick-up on the map" />
+                <LinkBtn icon={Navigation} href={navTo(job.pickup_lat, job.pickup_lng, job.pickup_address)} label="See pick-up on the map" />
               </div>
               {job.status === "assigned" ? (
                 <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
@@ -608,9 +618,9 @@ export default function DriverApp() {
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2">
               {active.status === "in_progress" ? (
-                <LinkBtn icon={Navigation} href={navUrl(active.dropoff_lat, active.dropoff_lng, active.dropoff_address)} label="Navigate to drop-off" />
+                <LinkBtn icon={Navigation} href={navToDropoff(active)} label="Navigate to drop-off" />
               ) : (
-                <LinkBtn icon={Navigation} href={navUrl(active.pickup_lat, active.pickup_lng, active.pickup_address)} label="Navigate to pick-up" />
+                <LinkBtn icon={Navigation} href={navTo(active.pickup_lat, active.pickup_lng, active.pickup_address)} label="Navigate to pick-up" />
               )}
               {active.customer_whatsapp ? (
                 <LinkBtn icon={Phone} href={`tel:${active.customer_whatsapp.replace(/\s/g, "")}`} label="Call customer" />
@@ -663,7 +673,7 @@ export default function DriverApp() {
               <ActiveJobMap job={job} me={position} />
             </div>
             <div className="mt-3">
-              <LinkBtn icon={Navigation} href={navUrl(job.pickup_lat, job.pickup_lng, job.pickup_address)} label="Directions to pick-up" />
+              <LinkBtn icon={Navigation} href={navTo(job.pickup_lat, job.pickup_lng, job.pickup_address)} label="Directions to pick-up" />
             </div>
             <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
               <BigBtn
@@ -935,6 +945,7 @@ function ActiveJobMap({ job, me }: { job: Job; me: { lat: number; lng: number } 
       dropoff={dropoff}
       vias={vias}
       stage={job.status === "in_progress" ? "to_dropoff" : "to_pickup"}
+      routePolyline={chosenRoute(job.fare_breakdown)?.polyline ?? null}
     />
   );
 }

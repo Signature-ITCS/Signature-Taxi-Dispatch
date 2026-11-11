@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { Map as LeafletMap, Layer } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useLeaflet, createMap, dotMarker } from "@/lib/leafletMap";
-import { fetchRoutePath } from "@/lib/polyline";
+import { fetchRoutePath, decodePolyline } from "@/lib/polyline";
 
 type Pt = { lat: number; lng: number };
 
@@ -35,6 +35,7 @@ export default function JobMap({
   dropoff,
   vias,
   stage,
+  routePolyline,
 }: {
   me: Pt | null;
   pickup: Pt | null;
@@ -42,6 +43,8 @@ export default function JobMap({
   vias: Pt[];
   /** "to_pickup" until the customer is picked up, then "to_dropoff". */
   stage: "to_pickup" | "to_dropoff";
+  /** The route the dispatcher chose (pick-up → drop-off); drawn instead of Google's pick. */
+  routePolyline?: string | null;
 }) {
   const { L, error } = useLeaflet();
   const el = useRef<HTMLDivElement>(null);
@@ -117,7 +120,8 @@ export default function JobMap({
     let cancelled = false;
     const origin = from ?? pickup ?? target;
     const waypoints = stage === "to_dropoff" ? vias : [];
-    fetchRoutePath(origin, target, waypoints).then((path) => {
+    const chosen = stage === "to_dropoff" && routePolyline ? decodePolyline(routePolyline) : null;
+    (chosen ? Promise.resolve(chosen) : fetchRoutePath(origin, target, waypoints)).then((path) => {
       if (cancelled || !path || !map.current) return;
       route.current.forEach((x) => x.remove());
       const ll = path.map((p) => [p.lat, p.lng] as [number, number]);
@@ -129,7 +133,7 @@ export default function JobMap({
     return () => {
       cancelled = true;
     };
-  }, [L, me, pickup, dropoff, vias, stage]);
+  }, [L, me, pickup, dropoff, vias, stage, routePolyline]);
 
   if (error) return null;
   return <div ref={el} className="relative z-0 h-56 w-full overflow-hidden rounded-xl bg-gray-100" />;

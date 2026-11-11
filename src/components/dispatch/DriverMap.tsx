@@ -5,7 +5,8 @@ import { MapPin, Navigation } from "lucide-react";
 import type { Map as LeafletMap, Layer } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useLeaflet, createMap, dotMarker } from "@/lib/leafletMap";
-import { fetchRoutePath } from "@/lib/polyline";
+import { fetchRoutePath, decodePolyline } from "@/lib/polyline";
+import { chosenRoute } from "@/lib/routeGuide";
 import type { Booking } from "@/lib/types";
 
 interface Props {
@@ -67,12 +68,15 @@ export default function DriverMap({ selectedJob }: Props) {
 
       // Draw the actual driving route through any via points (from our server's
       // Routes API call, so the page never needs a Google key)
+      const chosen = chosenRoute(selectedJob.fare_breakdown);
       if (hasPickup && hasDropoff) {
-        fetchRoutePath(
+        (chosen
+          ? Promise.resolve(decodePolyline(chosen.polyline))
+          : fetchRoutePath(
           { lat: selectedJob.pickup_lat!, lng: selectedJob.pickup_lng! },
           { lat: selectedJob.dropoff_lat!, lng: selectedJob.dropoff_lng! },
           vias.map((v) => ({ lat: v.lat, lng: v.lng }))
-        ).then((path) => {
+        )).then((path) => {
           // Ignore if the selection changed while this was in flight
           if (reqId !== reqRef.current || !path || !mapRef.current) return;
           if (routeRef.current) routeRef.current.remove();

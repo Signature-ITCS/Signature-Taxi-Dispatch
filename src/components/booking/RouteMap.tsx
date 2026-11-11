@@ -5,13 +5,15 @@ import { MapPin, Navigation, Loader2 } from "lucide-react";
 import type { Map as LeafletMap, Layer } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useLeaflet, createMap, dotMarker } from "@/lib/leafletMap";
-import { fetchRoutePath } from "@/lib/polyline";
+import { fetchRoutePath, decodePolyline } from "@/lib/polyline";
 import type { PlaceValue } from "@/components/booking/AddressAutocomplete";
 
 export interface RouteLeg {
   pickup: PlaceValue;
   vias: PlaceValue[];
   dropoff: PlaceValue;
+  /** The route line to draw (the dispatcher's chosen route); fetched when absent. */
+  polyline?: string | null;
 }
 
 interface Props {
@@ -96,6 +98,10 @@ export default function RouteMap({ outbound, returnLeg }: Props) {
       // The route comes from our own server (Google Routes API), so the page
       // never needs a Google key.
       const drawLeg = async (leg: RouteLeg, color: string, dashed: boolean) => {
+        if (leg.polyline) {
+          drawPath(decodePolyline(leg.polyline), color, dashed);
+          return;
+        }
         const path = await fetchRoutePath(
           { lat: leg.pickup.lat!, lng: leg.pickup.lng! },
           { lat: leg.dropoff.lat!, lng: leg.dropoff.lng! },
