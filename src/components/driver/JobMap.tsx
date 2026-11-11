@@ -72,9 +72,10 @@ export default function JobMap({
       markers.current.push(dotMarker(L, p.lat, p.lng, color, title, glyph, 200).addTo(m));
       pts.push([p.lat, p.lng]);
     };
-    add(pickup, "#16a34a", "Pick-up", "A");
-    vias.forEach((v, i) => add(v, "#6366f1", `Stop ${i + 1}`, String(i + 1)));
-    add(dropoff, "#0f172a", "Drop-off", "B");
+    // Numbered in the order the driver goes: 1 = pick-up, then each stop, last = drop-off.
+    add(pickup, "#16a34a", "1 · Pick-up", "1");
+    vias.forEach((v, i) => add(v, "#6366f1", `${i + 2} · Stop ${i + 1}`, String(i + 2)));
+    add(dropoff, "#0f172a", `${vias.length + 2} · Drop-off`, String(vias.length + 2));
     if (me) pts.push([me.lat, me.lng]);
     m.invalidateSize();
     if (pts.length > 1) m.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 16 });

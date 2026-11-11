@@ -751,11 +751,12 @@ function JobCard({ job, highlight, children }: { job: Job; highlight?: boolean; 
         <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">{whenLabel(job.scheduled_at)}</span>
       </div>
       <div className="mt-3 space-y-2">
-        <Line icon={MapPin} tone="text-green-600" text={job.pickup_address} />
+        {/* Same numbers as the map: 1 = pick-up, then each stop, last = drop-off. */}
+        <Line icon={MapPin} tone="text-green-600" text={job.pickup_address} n={1} bg="bg-green-600" />
         {vias.map((v, i) => (
-          <Line key={i} icon={CircleDot} tone="text-gray-400" text={v.address} />
+          <Line key={i} icon={CircleDot} tone="text-gray-400" text={v.address} n={i + 2} bg="bg-indigo-500" />
         ))}
-        <Line icon={Navigation} tone="text-ink-950" text={job.dropoff_address} />
+        <Line icon={Navigation} tone="text-ink-950" text={job.dropoff_address} n={vias.length + 2} bg="bg-ink-950" />
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
         <Chip icon={Users} text={`${job.passengers} pax · ${job.suitcases} cases`} />
@@ -808,10 +809,17 @@ function ActiveSteps({ status }: { status: Job["status"] }) {
   );
 }
 
-function Line({ icon: Icon, tone, text }: { icon: LucideIcon; tone: string; text: string }) {
+function Line({ icon: Icon, tone, text, n, bg }: { icon: LucideIcon; tone: string; text: string; n?: number; bg?: string }) {
   return (
     <p className="flex items-start gap-2 text-[15px] leading-snug text-ink-950">
-      <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", tone)} /> <span>{text}</span>
+      {n != null ? (
+        <span className={cn("mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white", bg ?? "bg-gray-500")}>
+          {n}
+        </span>
+      ) : (
+        <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", tone)} />
+      )}{" "}
+      <span>{text}</span>
     </p>
   );
 }

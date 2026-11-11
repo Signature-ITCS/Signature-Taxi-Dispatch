@@ -32,6 +32,7 @@ function iconFor(action: string) {
   if (action === "login") return { Icon: LogIn, tone: "bg-blue-50 text-blue-600" };
   if (action.startsWith("dispatcher_added") || action.includes("added")) return { Icon: UserPlus, tone: "bg-brand-50 text-brand-600" };
   if (action.includes("removed") || action.includes("delete")) return { Icon: UserMinus, tone: "bg-red-50 text-red-600" };
+  if (action === "booking_failed") return { Icon: ClipboardList, tone: "bg-red-50 text-red-600" };
   if (action.startsWith("booking")) return { Icon: ClipboardList, tone: "bg-brand-50 text-brand-600" };
   if (action.startsWith("driver")) return { Icon: CarFront, tone: "bg-violet-50 text-violet-600" };
   if (action.startsWith("cash")) return { Icon: Banknote, tone: "bg-green-50 text-green-600" };

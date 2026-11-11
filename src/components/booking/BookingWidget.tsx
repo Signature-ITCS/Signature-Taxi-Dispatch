@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import AddressAutocomplete, { type PlaceValue } from "@/components/booking/AddressAutocomplete";
 import CustomerHistory, { type PastJourney } from "@/components/booking/CustomerHistory";
+import { splitDoor, withDoor } from "@/lib/address";
 import RouteMap, { type RouteLeg } from "@/components/booking/RouteMap";
 import { carIcon } from "@/components/booking/CarIcon";
 import { money, isValidPhone } from "@/lib/format";
@@ -67,11 +68,6 @@ interface Journey {
   dropoffDoor?: string;
 }
 
-/** "Flat 2" + "10 High St, Sheerness" → "Flat 2, 10 High St, Sheerness". */
-const withDoor = (address: string, door?: string) => {
-  const d = (door ?? "").trim();
-  return d ? `${d}, ${address}` : address;
-};
 
 const empty: PlaceValue = { address: "", lat: null, lng: null };
 const emptyJourney: Journey = { pickup: empty, vias: [], dropoff: empty, km: null, min: null };
@@ -175,6 +171,39 @@ async function getRoute(j: Journey): Promise<{ km: number; min: number } | null>
 }
 
 const UNAVAILABLE = "That vehicle type is no longer available — please go back and choose another.";
+
+/**
+ * The reason a booking was refused, in words — instead of a bare "Booking
+ * failed". Staff (manual) see the platform reasons too; customers get a
+ * polite "call us" for those.
+ */
+function bookingError(code: string | undefined, status: number | undefined, staff: boolean): string {
+  if (status === 429 || code === "rate_limited")
+    return "Too many bookings from this connection in the last minute. Wait a minute and try again.";
+  if (code === "plan_limit_bookings")
+    return staff
+      ? "Your plan's monthly booking limit is reached. Upgrade the plan (Plan & billing) to take more bookings this month."
+      : "Online booking is temporarily unavailable. Please call us to book.";
+  if (code === "company_unavailable")
+    return staff ? "This company account is switched off (Plan & billing)." : "Online booking is temporarily unavailable. Please call us to book.";
+  const m: Record<string, string> = {
+    category_unavailable: UNAVAILABLE,
+    scheduled_too_soon: "A pre-booked pickup must be at least 30 minutes from now. Choose a later time, or book it for Now.",
+    invalid_phone: "That phone number doesn't look right. Check it and try again.",
+    invalid_email: "That email address doesn't look right. Check it or leave it empty.",
+    missing_fields: "The phone number, vehicle and journey are all needed.",
+    missing_customer_details: "The customer's phone number is missing.",
+    no_route: "Couldn't find a driving route. Pick each address from the suggestions list.",
+    customer_blocked: "This customer is blocked, so they can't be booked.",
+    unauthorized: "Your login has expired. Sign in again, then book.",
+    use_checkout: "Card bookings go through the card payment page. Choose Cash, or sign in again if you are staff.",
+    invalid_category: "Choose a vehicle type.",
+    invalid_website: "Booking isn't set up correctly (website key). Tell the admin.",
+    invalid_or_inactive_website: "Booking isn't set up correctly (website switched off). Tell the admin.",
+    server_error: "The server didn't save the booking. Try again; if it keeps happening, tell the admin.",
+  };
+  return (code && m[code]) ?? `Booking failed${code ? ` (${code})` : ""}. Please try again.`;
+}
 
 export default function BookingWidget({
   site = "",
@@ -417,10 +446,10 @@ export default function BookingWidget({
   }, [pendingCategory, quotes]);
 
   const legPayload = (j: Journey, at: string | null) => ({
-    pickup_address: withDoor(j.pickup.address, j.pickupDoor),
+    pickup_address: withDoor(j.pickupDoor, j.pickup.address),
     pickup_lat: j.pickup.lat,
     pickup_lng: j.pickup.lng,
-    dropoff_address: withDoor(j.dropoff.address, j.dropoffDoor),
+    dropoff_address: withDoor(j.dropoffDoor, j.dropoff.address),
     dropoff_lat: j.dropoff.lat,
     dropoff_lng: j.dropoff.lng,
     via_points: j.vias.map((v) => ({ address: v.address, lat: v.lat, lng: v.lng })),
@@ -497,13 +526,7 @@ export default function BookingWidget({
       const data = await res.json();
       setSubmitting(false);
       if (!data?.ok || !data.outbound?.ok) {
-        setError(
-          data?.error === "category_unavailable"
-            ? UNAVAILABLE
-            : data?.error === "plan_limit_bookings" || data?.error === "company_unavailable"
-              ? "Online booking is temporarily unavailable. Please call us to book."
-              : "Booking failed. Please try again."
-        );
+        setError(bookingError(data?.error ?? data?.outbound?.error, res.status, manual));
         return;
       }
       forgetCheckout();
@@ -732,16 +755,23 @@ export default function BookingWidget({
                           if (!name.trim() && c.name) setName(c.name);
                           if (!email.trim() && c.email) setEmail(c.email);
                         }}
-                        onTrip={(j: PastJourney, reversed: boolean) =>
+                        onTrip={(j: PastJourney, reversed: boolean) => {
+                          const from = splitDoor((reversed ? j.dropoff : j.pickup).address);
+                          const to = splitDoor((reversed ? j.pickup : j.dropoff).address);
                           setOutbound({
-                            pickup: reversed ? j.dropoff : j.pickup,
-                            dropoff: reversed ? j.pickup : j.dropoff,
+                            pickup: { ...(reversed ? j.dropoff : j.pickup), address: from.address },
+                            dropoff: { ...(reversed ? j.pickup : j.dropoff), address: to.address },
+                            pickupDoor: from.door,
+                            dropoffDoor: to.door,
                             vias: reversed ? [...j.vias].reverse() : j.vias,
                             km: null,
                             min: null,
-                          })
-                        }
-                        onPlace={(which, p) => setOutbound({ ...outbound, [which]: p, [which === "pickup" ? "pickupDoor" : "dropoffDoor"]: "", km: null, min: null })}
+                          });
+                        }}
+                        onPlace={(which, p) => {
+                          const s = splitDoor(p.address);
+                          setOutbound({ ...outbound, [which]: { ...p, address: s.address }, [which === "pickup" ? "pickupDoor" : "dropoffDoor"]: s.door, km: null, min: null });
+                        }}
                       />
                     </div>
                   </aside>

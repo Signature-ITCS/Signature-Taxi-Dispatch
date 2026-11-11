@@ -4,6 +4,13 @@ import { useEffect, useState } from "react";
 import { History, Loader2, MapPin, Navigation, ArrowLeftRight, Repeat, UserCheck, AlertTriangle } from "lucide-react";
 import type { PlaceValue } from "@/components/booking/AddressAutocomplete";
 import { isValidPhone, money } from "@/lib/format";
+import { splitDoor } from "@/lib/address";
+
+/** An address with its door / flat number shown on its own, in bold. */
+function Addr({ value }: { value: string }) {
+  const { door, address } = splitDoor(value);
+  return door ? <><strong>{door}</strong>, {address}</> : <>{value}</>;
+}
 
 export interface PastJourney {
   booking_number: string;
@@ -106,7 +113,7 @@ export default function CustomerHistory({
           <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Their places</p>
           {data.places.map((p) => (
             <div key={p.address} className="rounded-xl border border-gray-100 bg-white p-2">
-              <p className="line-clamp-2 text-ink-950">{p.address}</p>
+              <p className="line-clamp-2 text-ink-950"><Addr value={p.address} /></p>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 <button type="button" onClick={() => onPlace("pickup", p)} className="flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-xs font-semibold text-gray-700 hover:border-brand-300">
                   <MapPin className="h-3 w-3 text-brand-500" /> Pick up here
@@ -129,9 +136,9 @@ export default function CustomerHistory({
               <span>{when(j.when)} · {j.vehicle ?? "—"}{j.status === "cancelled" ? " · cancelled" : ""}</span>
               {j.fare != null && <span>{money(Number(j.fare))}</span>}
             </p>
-            <p className="mt-0.5 line-clamp-1 text-ink-950"><MapPin className="mr-1 inline h-3 w-3 text-brand-500" />{j.pickup.address}</p>
+            <p className="mt-0.5 line-clamp-1 text-ink-950"><MapPin className="mr-1 inline h-3 w-3 text-brand-500" /><Addr value={j.pickup.address} /></p>
             {j.vias.length > 0 && <p className="line-clamp-1 text-xs text-gray-500">via {j.vias.map((v) => v.address).join(" · ")}</p>}
-            <p className="line-clamp-1 text-ink-950"><Navigation className="mr-1 inline h-3 w-3" />{j.dropoff.address}</p>
+            <p className="line-clamp-1 text-ink-950"><Navigation className="mr-1 inline h-3 w-3" /><Addr value={j.dropoff.address} /></p>
             <div className="mt-1.5 flex gap-1.5">
               <button type="button" onClick={() => onTrip(j, false)} className="flex items-center gap-1 rounded-lg bg-brand-600 px-2 py-1 text-xs font-semibold text-white hover:bg-brand-700">
                 <Repeat className="h-3 w-3" /> Same trip

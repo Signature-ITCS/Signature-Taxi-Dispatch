@@ -8,6 +8,7 @@ import AddressAutocomplete, { type PlaceValue } from "@/components/booking/Addre
 import PhoneInput from "@/components/PhoneInput";
 import { money, cn } from "@/lib/format";
 import type { Booking } from "@/lib/types";
+import { splitDoor, withDoor } from "@/lib/address";
 
 /**
  * Edit an existing booking: customer, pickup / stops / drop-off, time, vehicle,
@@ -58,8 +59,13 @@ export default function EditBookingModal({
   const [name, setName] = useState(booking.customer_name ?? "");
   const [phone, setPhone] = useState(booking.customer_whatsapp ?? "");
   const [email, setEmail] = useState(booking.customer_email ?? "");
-  const [pickup, setPickup] = useState<PlaceValue>({ address: booking.pickup_address, lat: booking.pickup_lat, lng: booking.pickup_lng });
-  const [dropoff, setDropoff] = useState<PlaceValue>({ address: booking.dropoff_address, lat: booking.dropoff_lat, lng: booking.dropoff_lng });
+  // The map address (with its position) and the door / flat number, kept apart.
+  const [initialPickup] = useState(() => splitDoor(booking.pickup_address ?? ""));
+  const [initialDropoff] = useState(() => splitDoor(booking.dropoff_address ?? ""));
+  const [pickup, setPickup] = useState<PlaceValue>({ address: initialPickup.address, lat: booking.pickup_lat, lng: booking.pickup_lng });
+  const [dropoff, setDropoff] = useState<PlaceValue>({ address: initialDropoff.address, lat: booking.dropoff_lat, lng: booking.dropoff_lng });
+  const [pickupDoor, setPickupDoor] = useState(initialPickup.door);
+  const [dropoffDoor, setDropoffDoor] = useState(initialDropoff.door);
   const [vias, setVias] = useState<PlaceValue[]>(
     (booking.via_points ?? []).filter((v) => v.address).map((v) => ({ address: v.address, lat: v.lat, lng: v.lng }))
   );
@@ -88,8 +94,8 @@ export default function EditBookingModal({
 
   // Anything that moves the price → suggest recalculating it (staff can still keep it).
   const priceAffecting =
-    pickup.address !== booking.pickup_address ||
-    dropoff.address !== booking.dropoff_address ||
+    pickup.address !== initialPickup.address ||
+    dropoff.address !== initialDropoff.address ||
     JSON.stringify(vias.map((v) => v.address)) !== JSON.stringify((booking.via_points ?? []).filter((v) => v.address).map((v) => v.address)) ||
     categoryId !== booking.vehicle_category_id ||
     childSeat !== !!booking.child_seat ||
@@ -107,8 +113,8 @@ export default function EditBookingModal({
     customer_name: name,
     customer_whatsapp: phone,
     customer_email: email || null,
-    pickup,
-    dropoff,
+    pickup: { ...pickup, address: withDoor(pickupDoor, pickup.address) },
+    dropoff: { ...dropoff, address: withDoor(dropoffDoor, dropoff.address) },
     via_points: vias.filter((v) => v.address.trim()),
     scheduled_at: asap ? null : when ? new Date(when).toISOString() : null,
     vehicle_category_id: categoryId,
@@ -204,6 +210,7 @@ export default function EditBookingModal({
               onChange={(a) => setPickup({ address: a, lat: null, lng: null })}
               onSelect={setPickup}
             />
+            <DoorInput value={pickupDoor} onChange={setPickupDoor} />
             {vias.map((v, i) => (
               <div key={i} className="flex items-end gap-2">
                 <div className="min-w-0 flex-1">
@@ -239,6 +246,7 @@ export default function EditBookingModal({
               onChange={(a) => setDropoff({ address: a, lat: null, lng: null })}
               onSelect={setDropoff}
             />
+            <DoorInput value={dropoffDoor} onChange={setDropoffDoor} />
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="flex items-center gap-2 text-sm text-gray-700 sm:col-span-2">
                 <input type="checkbox" checked={asap} onChange={(e) => setAsap(e.target.checked)} className="h-4 w-4 accent-brand-600" />
@@ -361,6 +369,18 @@ export default function EditBookingModal({
         </div>
       </motion.div>
     </div>
+  );
+}
+
+/** Door / flat / unit the map address doesn't include — same box as the New Booking form. */
+function DoorInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="Door / flat no. or building (optional), e.g. Flat 2 or No. 14"
+      className="-mt-1 w-full rounded-lg border border-dashed border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400"
+    />
   );
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -81,6 +81,11 @@ export default function NotificationBell({ variant }: { variant: "sidebar" | "fl
 
 function Bell_({ variant }: { variant: "sidebar" | "floating" }) {
   const [supabase] = useState(() => createClient());
+  // Each bell (the sidebar one and the floating one are both on screen) needs its own
+  // channel: the browser Supabase client is shared, and reusing an already-subscribed
+  // channel name throws "cannot add postgres_changes callbacks … after subscribe()",
+  // which took down the whole page.
+  const channelName = `staff-notifications-${useId()}`;
   const router = useRouter();
   const pathname = usePathname();
   const base = pathname.startsWith("/admin") ? "/admin" : "/dispatch";
@@ -129,18 +134,22 @@ function Bell_({ variant }: { variant: "sidebar" | "floating" }) {
   // Live: new notifications appear at once, with a short chime.
   useEffect(() => {
     const ch = supabase
-      .channel("staff-notifications")
+      .channel(channelName)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "staff_notifications" }, (msg) => {
         const n = msg.new as Note;
         setNotes((list) => (list ? [n, ...list.filter((x) => x.id !== n.id)].slice(0, 40) : list));
         setUnread((u) => u + 1);
-        chime(n.severity === "urgent");
+        // Both bells hear every notification; only the first to see it plays the sound.
+        if (!chimed.has(n.id)) {
+          chimed.add(n.id);
+          chime(n.severity === "urgent");
+        }
       })
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [supabase]);
+  }, [supabase, channelName]);
 
   // Close on a click outside.
   useEffect(() => {
@@ -268,6 +277,9 @@ const FLOAT_POS = "right-4 bottom-[calc(76px+env(safe-area-inset-bottom))]";
 function refOf(n: Note): string {
   return n.title.match(/TX\d{6}-\d+-[A-Z0-9]+/)?.[0] ?? "";
 }
+
+/** Notification ids that have already chimed (shared by every bell on the page). */
+const chimed = new Set<string>();
 
 function chime(urgent: boolean) {
   try {

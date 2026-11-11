@@ -59,10 +59,11 @@ export default function DriverMap({ selectedJob }: Props) {
       const hasPickup = selectedJob.pickup_lat != null && selectedJob.pickup_lng != null;
       const hasDropoff = selectedJob.dropoff_lat != null && selectedJob.dropoff_lng != null;
 
-      if (hasPickup) addMarker(selectedJob.pickup_lat!, selectedJob.pickup_lng!, "#16a34a", "Pickup", "A");
-      vias.forEach((v, i) => addMarker(v.lat, v.lng, "#6366f1", v.address ?? `Via ${i + 1}`, String(i + 1)));
+      // Numbered in travel order: 1 = pick-up, then each stop, last = drop-off.
+      if (hasPickup) addMarker(selectedJob.pickup_lat!, selectedJob.pickup_lng!, "#16a34a", "1 · Pickup", "1");
+      vias.forEach((v, i) => addMarker(v.lat, v.lng, "#6366f1", `${i + 2} · ${v.address ?? `Via ${i + 1}`}`, String(i + 2)));
       if (hasDropoff)
-        addMarker(selectedJob.dropoff_lat!, selectedJob.dropoff_lng!, "#0b0b0f", "Drop-off", "B");
+        addMarker(selectedJob.dropoff_lat!, selectedJob.dropoff_lng!, "#0b0b0f", `${vias.length + 2} · Drop-off`, String(vias.length + 2));
 
       // Draw the actual driving route through any via points (from our server's
       // Routes API call, so the page never needs a Google key)
