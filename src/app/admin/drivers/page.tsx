@@ -24,6 +24,7 @@ import {
   Smartphone,
   Search,
   KeyRound,
+  Percent,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PageHeader from "@/components/admin/PageHeader";
@@ -217,6 +218,11 @@ export default function DriversPage() {
                   <Info icon={Mail} value={d.email || "No email"} muted={!d.email} />
                   <Info icon={Car} value={car ? `${car}${v?.license_plate ? ` · ${v.license_plate}` : ""}` : "No vehicle"} muted={!car} />
                   <Info icon={IdCard} value={d.license_number || "No licence"} muted={!d.license_number} />
+                  <Info
+                    icon={Percent}
+                    value={d.commission_percent != null ? `Commission ${Number(d.commission_percent)}% · driver keeps ${100 - Number(d.commission_percent)}%` : "Commission not set"}
+                    muted={d.commission_percent == null}
+                  />
                   <div className="sm:col-span-2">
                     <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">
                       <MapPin className="h-3.5 w-3.5 shrink-0" />
@@ -478,6 +484,16 @@ function DeleteConfirm({
   );
 }
 
+const COMMISSION_FAILED =
+  "The driver was saved, but the commission couldn't be. Run db/2026-11-03_driver_commission.sql in Supabase, then set it again.";
+
+/** Saved on its own so the rest of the driver form still saves if the commission column isn't there yet. */
+async function saveCommission(driverId: string, commission: number | null): Promise<boolean> {
+  const { error } = await createClient().from("drivers").update({ commission_percent: commission }).eq("id", driverId);
+  if (error) console.error("[drivers] commission save failed", error);
+  return !error;
+}
+
 function DriverModal({
   driver,
   onClose,
@@ -497,6 +513,7 @@ function DriverModal({
     email: driver?.email ?? "",
     service_area: driver?.service_area ?? "",
     license_number: driver?.license_number ?? "",
+    commission_percent: driver?.commission_percent != null ? String(Number(driver.commission_percent)) : "",
     category_id: vehicle?.category_id ?? "",
     make: vehicle?.make ?? "",
     model: vehicle?.model ?? "",
@@ -530,6 +547,12 @@ function DriverModal({
       setError("Name, WhatsApp and service area are required.");
       return;
     }
+    const commissionText = form.commission_percent.trim();
+    const commission = commissionText === "" ? null : Number(commissionText);
+    if (commission != null && (!Number.isFinite(commission) || commission < 0 || commission > 100)) {
+      setError("Commission must be a percentage between 0 and 100.");
+      return;
+    }
     if (!editing && giveApp && (!form.email.trim() || appPassword.length < 8)) {
       setError("For the driver app, enter the driver's email and a password of at least 8 characters.");
       return;
@@ -560,6 +583,11 @@ function DriverModal({
         setError("Could not save changes. Try again.");
         return;
       }
+      if (!(await saveCommission(driver.id, commission))) {
+        setSaving(false);
+        setError(COMMISSION_FAILED);
+        return;
+      }
       if (vehicle?.id) {
         await supabase.from("vehicles").update(vehiclePayload).eq("id", vehicle.id);
       } else if (hasVehicle) {
@@ -583,6 +611,7 @@ function DriverModal({
       if (hasVehicle) {
         await supabase.from("vehicles").insert({ driver_id: newDriver.id, ...vehiclePayload });
       }
+      if (!(await saveCommission(newDriver.id, commission))) alert(COMMISSION_FAILED);
       if (giveApp) {
         const res = await createAppLogin(newDriver.id, form.email.trim(), appPassword);
         alert(res);
@@ -625,6 +654,27 @@ function DriverModal({
             placeholder="Service area * (e.g. Manchester, Salford, Stockport)"
           />
           <Input value={form.license_number} onChange={(v) => set("license_number", v)} placeholder="Licence number (optional)" />
+          <div>
+            <div className="relative">
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={100}
+                step="0.5"
+                value={form.commission_percent}
+                onChange={(e) => set("commission_percent", e.target.value)}
+                placeholder="Company commission (e.g. 20)"
+                className="w-full rounded-xl border border-gray-200 py-2.5 pl-3.5 pr-9 text-base outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 sm:text-sm"
+              />
+              <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-400">%</span>
+            </div>
+            <p className="mt-1 pl-1 text-xs text-gray-400">
+              {form.commission_percent.trim() !== "" && Number.isFinite(Number(form.commission_percent))
+                ? `Company keeps ${Number(form.commission_percent)}%, driver earns ${Math.max(0, 100 - Number(form.commission_percent))}% of each fare. Staff reports only, never shown to customers.`
+                : "The company's share of each fare. Used in driver reports only, never shown to customers."}
+            </p>
+          </div>
 
           <p className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Vehicle</p>
           <select

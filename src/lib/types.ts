@@ -64,6 +64,8 @@ export interface Driver {
   whatsapp: string | null;
   email: string | null;
   service_area: string | null;
+  /** Company commission % on this driver's fares (null = not set). Staff reports only. */
+  commission_percent?: number | null;
   license_number: string | null;
   availability: DriverAvailability;
   current_lat: number | null;

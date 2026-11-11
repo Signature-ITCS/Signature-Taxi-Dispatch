@@ -6,7 +6,7 @@ import { Loader2, Printer, ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { money, dateTime, cn } from "@/lib/format";
 import { useBrand } from "@/components/BrandProvider";
-import { fetchReportRows, filtersFromParams, fareOf, driverOf, type ReportRow } from "@/lib/bookingReport";
+import { fetchReportRows, filtersFromParams, fareOf, driverOf, splitOf, settlements, balanceLabel, type ReportRow } from "@/lib/bookingReport";
 
 /**
  * A printable bookings report.
@@ -69,6 +69,8 @@ function Report() {
     .filter((r) => r.payment_status !== "paid" && r.status !== "cancelled")
     .reduce((s, r) => s + fareOf(r), 0);
 
+  const drivers = settlements(rows);
+
   const rangeLabel =
     from && to ? `${from} to ${to}` : from ? `from ${from}` : to ? `up to ${to}` : "All dates";
 
@@ -121,6 +123,54 @@ function Report() {
         <Tile label="Card (completed)" value={money(cardTotal)} />
       </div>
 
+      {/* Driver settlement — staff only (this report is never shown to customers) */}
+      {drivers.length > 0 && (
+        <div className="mb-6 break-inside-avoid">
+          <h2 className="mb-2 font-display text-base font-bold">Driver settlement (completed jobs)</h2>
+          <table className="w-full border-collapse text-[11px]">
+            <thead>
+              <tr className="border-b-2 border-gray-300 text-left">
+                <Th>Driver</Th>
+                <Th className="text-right">Jobs</Th>
+                <Th className="text-right">Takings</Th>
+                <Th className="text-right">Company commission</Th>
+                <Th className="text-right">Driver earnings</Th>
+                <Th className="text-right">Cash held by driver</Th>
+                <Th className="text-right">Card / account held by company</Th>
+                <Th className="text-right">Balance</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {drivers.map((d) => (
+                <tr key={d.driverId} className="border-b border-gray-200 align-top">
+                  <Td className="font-semibold">
+                    {d.name}
+                    {d.rateMissing > 0 && (
+                      <span className="block font-normal text-amber-700">
+                        Commission not set on {d.rateMissing} job{d.rateMissing === 1 ? "" : "s"}
+                      </span>
+                    )}
+                  </Td>
+                  <Td className="text-right">{d.jobs}</Td>
+                  <Td className="text-right">{money(d.takings)}</Td>
+                  <Td className="text-right">{money(d.company)}</Td>
+                  <Td className="text-right">{money(d.driver)}</Td>
+                  <Td className="text-right">{money(d.cashHeld)}</Td>
+                  <Td className="text-right">{money(d.companyHeld)}</Td>
+                  <Td className={cn("text-right font-bold", d.balance > 0 ? "text-green-700" : d.balance < 0 ? "text-red-700" : "")}>
+                    {balanceLabel(d.balance)}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-1.5 text-[10px] text-gray-500">
+            Cash jobs: the driver holds the fare and owes the company its commission. Card and account jobs: the company holds the fare and
+            owes the driver their share. Balance = driver shares on card/account jobs − commission on cash jobs.
+          </p>
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <p className="py-10 text-center text-sm text-gray-500">No bookings in this range.</p>
       ) : (
@@ -135,6 +185,7 @@ function Report() {
               <Th>Status</Th>
               <Th>Payment</Th>
               <Th className="text-right">Fare</Th>
+              <Th className="text-right">Commission split</Th>
             </tr>
           </thead>
           <tbody>
@@ -164,6 +215,20 @@ function Report() {
                   </span>
                 </Td>
                 <Td className="whitespace-nowrap text-right font-semibold">{money(fareOf(r))}</Td>
+                <Td className="whitespace-nowrap text-right">
+                  {(() => {
+                    const sp = splitOf(r);
+                    if (!sp) return <span className="text-gray-400">—</span>;
+                    if (sp.rate == null) return <span className="text-amber-700">Rate not set</span>;
+                    return (
+                      <>
+                        {sp.rate}% · company {money(sp.company)}
+                        <br />
+                        <span className="text-gray-600">driver {money(sp.driver)}</span>
+                      </>
+                    );
+                  })()}
+                </Td>
               </tr>
             ))}
           </tbody>
