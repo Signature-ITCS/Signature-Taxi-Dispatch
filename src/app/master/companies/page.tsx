@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import HelpLink from "@/components/docs/HelpLink";
+import { TWO_FACTOR_ENABLED } from "@/lib/twoFactor";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Loader2, Plus, X, ExternalLink, Mail, History, Trash2, DatabaseBackup } from "lucide-react";
@@ -376,7 +377,7 @@ function CompanyPanel({ company: c, plans, onClose, onChanged }: { company: Comp
           </button>
         </div>
 
-        <section className="space-y-2 rounded-xl border border-gray-100 p-4">
+        {TWO_FACTOR_ENABLED && <section className="space-y-2 rounded-xl border border-gray-100 p-4">
           <p className="font-medium text-gray-700">Lost phone — reset two-factor sign-in</p>
           <p className="text-xs text-gray-500">
             Removes the authenticator from one of this company&apos;s logins, so they can sign in with their password and set up a
@@ -396,7 +397,7 @@ function CompanyPanel({ company: c, plans, onClose, onChanged }: { company: Comp
               {busy === "reset2fa" && <Loader2 className="h-4 w-4 animate-spin" />} Reset
             </button>
           </div>
-        </section>
+        </section>}
 
         <section className="rounded-xl border border-gray-100 p-4">
           <div className="flex items-center justify-between">

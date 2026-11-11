@@ -3,7 +3,7 @@
 import Link from "next/link";
 import IdleSignOut from "@/components/IdleSignOut";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Building2, Tags, LifeBuoy, Settings, ScrollText, LogOut, Crown, BookOpen, Receipt, ShieldCheck, Handshake } from "lucide-react";
+import { LayoutDashboard, Building2, Tags, LifeBuoy, Settings, ScrollText, LogOut, Crown, BookOpen, Receipt, Handshake } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 const NAV = [
@@ -15,7 +15,6 @@ const NAV = [
   { href: "/master/requests", label: "Requests", icon: LifeBuoy },
   { href: "/master/settings", label: "Platform settings", icon: Settings },
   { href: "/master/audit", label: "Audit log", icon: ScrollText },
-  { href: "/security", label: "Two-factor sign-in", icon: ShieldCheck },
   { href: "/documentation", label: "Documentation", icon: BookOpen },
 ];
 

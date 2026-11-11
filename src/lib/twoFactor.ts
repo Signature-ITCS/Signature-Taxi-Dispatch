@@ -14,6 +14,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * "setup" → they must set one up before going further.
  * The database enforces the same rules (db/2026-10-28_two_factor.sql).
  */
+/**
+ * Two-factor sign-in is switched OFF for now: nobody is asked for a code or to
+ * set one up. To switch it back on: set this to true AND re-run
+ * db/2026-10-28_two_factor_grace.sql (the database check).
+ */
+export const TWO_FACTOR_ENABLED = false;
+
 export interface TwoFactor {
   enrolled: boolean;
   verified: boolean;
@@ -23,6 +30,7 @@ export interface TwoFactor {
 }
 
 export async function twoFactorOf(supabase: SupabaseClient, required: boolean, graceUntil: string | null = null): Promise<TwoFactor> {
+  if (!TWO_FACTOR_ENABLED) return { enrolled: false, verified: false, required: false, graceUntil: null, block: null };
   const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   const enrolled = data?.nextLevel === "aal2";
   const verified = data?.currentLevel === "aal2";

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getOfficeContext, isPlatformOwnerUser, audit } from "@/lib/tenant";
-import { twoFactorOf, officeTwoFactor } from "@/lib/twoFactor";
+import { twoFactorOf, officeTwoFactor, TWO_FACTOR_ENABLED } from "@/lib/twoFactor";
 import { tenantDb } from "@/lib/tenantDb";
 import { getPartnerByUser } from "@/lib/partners";
 
@@ -55,6 +55,7 @@ export async function POST(req: Request) {
   if (!office) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 403 });
   const { require } = (await req.json().catch(() => ({}))) as { require?: unknown };
   if (typeof require !== "boolean") return NextResponse.json({ ok: false, error: "bad_request" });
+  if (!TWO_FACTOR_ENABLED) return NextResponse.json({ ok: false, error: "two_factor_off" });
   if (require) {
     const tf = await twoFactorOf(await createClient(), false);
     if (!tf.verified) return NextResponse.json({ ok: false, error: "set_up_yours_first" });

@@ -21,7 +21,6 @@ import {
   Headset,
   ScrollText,
   Settings,
-  ShieldCheck,
   Handshake,
   DatabaseBackup,
   BookOpen,
@@ -54,7 +53,6 @@ const NAV = [
   { href: "/documentation", label: "Help & docs", icon: BookOpen },
   { href: "/dispatch/network", label: "Partner network", icon: Handshake },
   { href: "/account", label: "Plan & billing", icon: CreditCard },
-  { href: "/security", label: "Two-factor sign-in", icon: ShieldCheck },
 ];
 
 export default function AdminShell({
