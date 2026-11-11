@@ -24,7 +24,7 @@ export interface BookingEmailData {
   carName?: string | null;
   distanceKm?: number | null;
   fare: number;
-  paymentMethod: "cash" | "card";
+  paymentMethod: "cash" | "card" | "account";
   paid?: boolean;
   scheduledAt?: string | null;
   isReturn?: boolean;
@@ -61,6 +61,7 @@ function whenLabel(iso?: string | null): string {
 
 function payLabel(d: BookingEmailData): string {
   if (d.paymentMethod === "card") return d.paid ? "Paid by card ✓" : "Card (payment pending)";
+  if (d.paymentMethod === "account") return "On account (invoiced)";
   return "Cash to driver";
 }
 
@@ -457,6 +458,36 @@ export function upcomingReminderEmail(jobs: ReminderJob[], dispatchUrl: string, 
     subject: `⏰ ${jobs.length} pickup${jobs.length === 1 ? "" : "s"} within the hour${noDriver ? ` (${noDriver} unassigned)` : ""}`,
     html,
   };
+}
+
+export interface InvoiceEmailData {
+  accountName: string;
+  invoiceNumber: string;
+  periodLabel: string; // "October 2026"
+  journeys: number;
+  total: number;
+}
+
+/** Monthly account invoice — the PDF (with every journey) is attached. */
+export function accountInvoiceEmail(d: InvoiceEmailData, brand: EmailBrand & { contact?: { phone: string } }): { subject: string; html: string } {
+  const html = shell({
+    preheader: `Invoice ${d.invoiceNumber} for ${d.periodLabel}: ${d.journeys} journey${d.journeys === 1 ? "" : "s"}, £${d.total.toFixed(2)}`,
+    heading: `Your invoice for ${escapeHtml(d.periodLabel)}`,
+    sub: `${escapeHtml(d.accountName)} · account journeys with ${escapeHtml(brand.name)}`,
+    footer: brand.name,
+    body: `
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+        ${row("Invoice", escapeHtml(d.invoiceNumber))}
+        ${row("Period", escapeHtml(d.periodLabel))}
+        ${row("Journeys", String(d.journeys))}
+        ${row("Total", `£${d.total.toFixed(2)}`, true)}
+      </table>
+      <p style="margin:18px 0 0 0;color:#6b7280;font-size:13px;line-height:1.6;">
+        The attached PDF lists every journey on your account this month. Please quote
+        <b>${escapeHtml(d.invoiceNumber)}</b> with your payment. Questions? Just reply to this email${brand.contact?.phone ? ` or call ${escapeHtml(brand.contact.phone)}` : ""}.
+      </p>`,
+  });
+  return { subject: `Invoice ${d.invoiceNumber} — ${d.periodLabel} — ${brand.name}`, html };
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */

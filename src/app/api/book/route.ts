@@ -92,6 +92,20 @@ async function book(req: Request): Promise<Response> {
     return NextResponse.json({ ok: false, error: "use_checkout" });
   }
 
+  // Corporate account: staff only, and the account must be this company's and active.
+  let accountId: string | null = null;
+  if (input.payment_method === "account") {
+    if (!isStaff) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 403 });
+    const { data: acc } = await createAdminClient()
+      .from("accounts")
+      .select("id, is_active")
+      .eq("id", String(input.account_id ?? ""))
+      .eq("company_id", companyId)
+      .maybeSingle();
+    if (!acc?.is_active) return NextResponse.json({ ok: false, error: "invalid_account" });
+    accountId = acc.id;
+  }
+
   // Only staff may book without coordinates (a phone booking with a typed
   // address). For the public, no coordinates means no price — see
   // resolveLegDistance().
@@ -164,6 +178,18 @@ async function book(req: Request): Promise<Response> {
           .eq("company_id", companyId);
       }
     }
+  }
+
+  // Put the journey (both legs) on the account. The booking was written as cash by
+  // the public RPC; only here, after the staff check above, does it become "account".
+  if (accountId && outboundId) {
+    const ids = [outboundId, created.return?.ok ? created.return.booking_id : null].filter(Boolean) as string[];
+    const { error: accErr } = await createAdminClient()
+      .from("bookings")
+      .update({ account_id: accountId, payment_method: "account" })
+      .in("id", ids)
+      .eq("company_id", companyId);
+    if (accErr) console.error("[book] could not put booking on account", accErr);
   }
 
   const totalFare = overrideFare ?? created.total;

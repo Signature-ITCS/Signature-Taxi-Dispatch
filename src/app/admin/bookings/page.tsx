@@ -732,7 +732,7 @@ function BookingDetailModal({
   };
 
   const payChoice: PaymentChoice | null =
-    pay.status === "paid" ? (pay.method === "card" ? "card" : "cash") : pay.status === "pending" ? "unpaid" : null;
+    pay.status === "paid" ? (pay.method === "card" ? "card" : pay.method === "account" ? null : "cash") : pay.status === "pending" ? "unpaid" : null;
   const paidOnline = !!row.stripe_payment_intent_id;
 
   return (
@@ -817,7 +817,7 @@ function BookingDetailModal({
           <DetailRow
             icon={row.payment_method === "cash" ? Banknote : CreditCard}
             label="Payment"
-            value={`${row.payment_method === "cash" ? "Cash" : "Card"} · ${row.category?.name ?? "—"}`}
+            value={`${row.payment_method === "account" ? "On account" : row.payment_method === "cash" ? "Cash" : "Card"} · ${row.category?.name ?? "—"}`}
           />
           <DetailRow
             icon={Users}
@@ -1119,12 +1119,13 @@ function ReportModal({ onClose, currentStatus }: { onClose: () => void; currentS
 
         <div className="mt-3">
           <span className={label}>Payment</span>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {(
               [
                 ["all", "All"],
                 ["cash", "Cash jobs"],
                 ["card", "Card jobs"],
+                ["account", "Account jobs"],
               ] as const
             ).map(([k, t]) => (
               <button

@@ -17,7 +17,7 @@ import { getSecret } from "./secrets";
 import { getCompanyBrand, getPlatformName } from "./companyBrand";
 import { createAdminClient } from "./supabase/admin";
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** "Name <a@b.c>" or "a@b.c" → "a@b.c". */
 function addressOf(from: string | undefined | null): string | null {
@@ -75,6 +75,8 @@ export async function sendEmail(opts: {
   subject: string;
   html: string;
   replyTo?: string;
+  /** Files to attach (e.g. an invoice PDF). `content` is base64. */
+  attachments?: { filename: string; content: string }[];
 }): Promise<boolean> {
   const t = await transport(opts.companyId);
   if (!t) return false;
@@ -94,6 +96,7 @@ export async function sendEmail(opts: {
         subject: opts.subject,
         html: opts.html,
         ...(replyTo.length ? { reply_to: replyTo } : {}),
+        ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
       }),
     });
 

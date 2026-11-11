@@ -111,3 +111,8 @@ export function normalizeWhatsapp(v: string | null | undefined, cc = "44"): stri
 export function cn(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(" ");
 }
+
+/** How a journey is paid, for people: Cash / Card / Account. */
+export function paymentLabel(method: string | null | undefined): string {
+  return method === "card" ? "Card" : method === "account" ? "Account" : "Cash";
+}

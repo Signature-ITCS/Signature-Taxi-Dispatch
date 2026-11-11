@@ -104,8 +104,12 @@ function Receipt() {
     : paid
       ? row.payment_method === "card"
         ? "Paid by card"
-        : "Paid by cash"
-      : "Not yet paid";
+        : row.payment_method === "account"
+          ? "Paid on account"
+          : "Paid by cash"
+      : row.payment_method === "account"
+        ? "On account (invoiced monthly)"
+        : "Not yet paid";
   const journeyAt = row.scheduled_at ?? row.created_at;
   const driverName = row.driver?.full_name ?? row.external_driver_name ?? null;
   const car = vehicle

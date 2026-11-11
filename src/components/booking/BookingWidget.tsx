@@ -29,6 +29,7 @@ import {
   Map as MapIcon,
   ChevronDown,
   Minus,
+  Building2,
 } from "lucide-react";
 import AddressAutocomplete, { type PlaceValue } from "@/components/booking/AddressAutocomplete";
 import CustomerHistory, { type PastJourney } from "@/components/booking/CustomerHistory";
@@ -40,6 +41,7 @@ import { rememberCheckout, rememberedCheckout, forgetCheckout } from "@/lib/chec
 import { useBrand } from "@/components/BrandProvider";
 import type { FareBreakdown, PaymentMethod } from "@/lib/types";
 import { Logo } from "@/components/Brand";
+import { createClient } from "@/lib/supabase/client";
 import PhoneInput from "@/components/PhoneInput";
 
 interface Quote {
@@ -264,6 +266,10 @@ export default function BookingWidget({
   const [childSeatPrice, setChildSeatPrice] = useState(0);
   // Staff-only manual price override (discount / rush pricing). Ignored for public customers.
   const [customPrice, setCustomPrice] = useState("");
+  // Staff only: who the journey is for — a customer, or a corporate account (invoiced monthly).
+  const [bookFor, setBookFor] = useState<"customer" | "account">("customer");
+  const [accounts, setAccounts] = useState<{ id: string; name: string; phone: string | null }[]>([]);
+  const [accountId, setAccountId] = useState("");
   const [passengers, setPassengers] = useState(1);
   const [suitcases, setSuitcases] = useState(0);
   const [handLuggage, setHandLuggage] = useState(0);
@@ -415,6 +421,21 @@ export default function BookingWidget({
   // Email is optional; if one is typed it must look like an address.
   const emailOk = !email.trim() || emailValid(email);
 
+  // Staff: load the active corporate accounts once.
+  useEffect(() => {
+    if (!manual) return;
+    createClient()
+      .from("accounts")
+      .select("id, name, phone")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => setAccounts(data ?? []));
+  }, [manual]);
+
+  const onAccount = manual && bookFor === "account";
+  const accountOk = !onAccount || !!accountId;
+  const chosenAccount = accounts.find((a) => a.id === accountId);
+
   // Card is closed to the public until it is explicitly switched on. Staff
   // taking a phone booking keep it, because they collect that payment
   // themselves — it never goes near Stripe.
@@ -488,7 +509,8 @@ export default function BookingWidget({
     whatsapp: whatsapp.trim(),
     email: email.trim(),
     category_id: selected,
-    payment_method: payment,
+    payment_method: onAccount ? "account" : payment,
+    ...(onAccount ? { account_id: accountId } : {}),
     notes: notes || null,
     child_seat: childSeatOn,
     passengers,
@@ -507,7 +529,7 @@ export default function BookingWidget({
    * nothing behind. The customer comes back to /booking/complete.
    */
   const startCardPayment = async () => {
-    if (!selected || !phoneValid || !emailOk) return;
+    if (!selected || !phoneValid || !emailOk || !accountOk) return;
     setLeaving(true);
     setError(null);
     try {
@@ -615,7 +637,7 @@ export default function BookingWidget({
 
           <div className="p-6">
             {result ? (
-              <Success result={result} payment={payment} />
+              <Success result={result} payment={onAccount ? "account" : payment} />
             ) : step === 0 ? (
               <motion.div
                 key="trip"
@@ -912,9 +934,61 @@ export default function BookingWidget({
                 >
                   <ArrowLeft className="h-4 w-4" /> Back
                 </button>
-                <h2 className="font-display text-xl font-bold text-ink-950">Your details</h2>
+                <h2 className="font-display text-xl font-bold text-ink-950">{manual ? "Booking details" : "Your details"}</h2>
 
-                <Field icon={User} placeholder="Full name (optional)" value={name} onChange={setName} />
+                {manual && (
+                  <div className="space-y-2.5">
+                    <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1">
+                      {(
+                        [
+                          { key: "customer", label: "Customer", icon: User },
+                          { key: "account", label: "Account", icon: Building2 },
+                        ] as const
+                      ).map((o) => (
+                        <button
+                          key={o.key}
+                          type="button"
+                          onClick={() => setBookFor(o.key)}
+                          aria-pressed={bookFor === o.key}
+                          className={`flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+                            bookFor === o.key ? "bg-white text-ink-950 shadow-sm" : "text-gray-500 hover:text-ink-950"
+                          }`}
+                        >
+                          <o.icon className="h-4 w-4" /> {o.label}
+                        </button>
+                      ))}
+                    </div>
+                    {bookFor === "account" && (
+                      <div>
+                        <div className="relative">
+                          <Building2 className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                          <select
+                            value={accountId}
+                            onChange={(e) => {
+                              setAccountId(e.target.value);
+                              const acc = accounts.find((a) => a.id === e.target.value);
+                              if (acc?.phone && !whatsapp.trim()) setWhatsapp(acc.phone);
+                            }}
+                            className="w-full appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-10 text-[15px] outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10"
+                          >
+                            <option value="">Choose an account…</option>
+                            {accounts.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.name}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        </div>
+                        {accounts.length === 0 && (
+                          <p className="mt-1 pl-1 text-xs text-gray-500">No accounts yet. Add one in the Accounts tab.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <Field icon={User} placeholder={onAccount ? "Passenger name" : "Full name (optional)"} value={name} onChange={setName} />
                 <div>
                   <PhoneInput placeholder="Mobile number" value={whatsapp} onChange={setWhatsapp} />
                   {whatsapp.trim() && !phoneValid && (
@@ -994,7 +1068,12 @@ export default function BookingWidget({
                   <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                     Payment
                   </span>
-                  {!cardOffered ? (
+                  {onAccount ? (
+                    <div className="flex items-center gap-2.5 rounded-xl border-2 border-brand-500 bg-brand-50/60 py-3 pl-4 text-sm font-medium text-ink-950">
+                      <Building2 className="h-5 w-5 shrink-0 text-brand-600" />
+                      {chosenAccount ? `On account: ${chosenAccount.name} (invoiced monthly)` : "On account (choose the account above)"}
+                    </div>
+                  ) : !cardOffered ? (
                     <div className="flex items-center gap-2.5 rounded-xl border-2 border-brand-500 bg-brand-50/60 py-3 pl-4 text-sm font-medium text-ink-950">
                       <Banknote className="h-5 w-5 text-brand-600" /> Cash to driver
                     </div>
@@ -1100,7 +1179,7 @@ export default function BookingWidget({
                 )}
 
                 <button
-                  disabled={submitting || leaving || !phoneValid || !emailOk}
+                  disabled={submitting || leaving || !phoneValid || !emailOk || !accountOk}
                   onClick={payment === "card" && !manual ? startCardPayment : submit}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-4 text-base font-bold text-white shadow-lg shadow-brand-500/30 transition-all hover:bg-brand-600 disabled:bg-gray-200 disabled:text-gray-400"
                 >
@@ -1489,7 +1568,7 @@ function Success({
           <span className="text-gray-500">Payment</span>
           {/* A paid-by-card confirmation lives on /booking/complete, not here —
               this screen is only reached by a booking that is paid later. */}
-          <span className="font-semibold text-ink-950">{payment === "cash" ? "Cash to driver" : "Card"}</span>
+          <span className="font-semibold text-ink-950">{payment === "account" ? "On account" : payment === "cash" ? "Cash to driver" : "Card"}</span>
         </div>
       </div>
       <a

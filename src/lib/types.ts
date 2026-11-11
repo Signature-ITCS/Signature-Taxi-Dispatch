@@ -2,7 +2,7 @@
 
 export type UserRole = "driver" | "dispatcher" | "admin";
 export type DriverAvailability = "offline" | "online" | "on_trip";
-export type PaymentMethod = "cash" | "card";
+export type PaymentMethod = "cash" | "card" | "account";
 export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
 /** Office-side status staff set by hand. Separate from the ride lifecycle (BookingStatus). */
 export type JobStatus = "processing" | "on_hold" | "completed" | "cancelled" | "refunded";
@@ -237,4 +237,36 @@ export interface CreateBookingResult {
   estimated_fare?: number;
   fare_breakdown?: FareBreakdown;
   website?: string;
+}
+
+/** A corporate customer: journeys booked on it are invoiced monthly. */
+export interface Account {
+  id: string;
+  company_id: string;
+  name: string;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Invoice {
+  id: string;
+  company_id: string;
+  invoice_number: string;
+  account_id: string;
+  period_start: string;
+  period_end: string;
+  journeys: number;
+  total: number;
+  booking_ids: string[];
+  issued_at: string;
+  emailed_at: string | null;
+  emailed_to: string | null;
+  email_error: string | null;
+  paid_at: string | null;
 }

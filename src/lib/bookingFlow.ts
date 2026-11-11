@@ -35,7 +35,9 @@ export interface BookingInput {
   /** Optional — without it the customer just doesn't get the confirmation email. */
   email?: string | null;
   category_id: string;
-  payment_method?: "cash" | "card";
+  payment_method?: "cash" | "card" | "account";
+  /** Staff only: the corporate account the journey is invoiced to (payment_method "account"). */
+  account_id?: string | null;
   notes?: string | null;
   child_seat?: boolean;
   passengers?: number;
@@ -160,7 +162,8 @@ export async function createTrip(
       p_dropoff_lng: leg.dropoff_lng ?? null,
       p_distance_km: distance_km,
       p_duration_min: duration_min,
-      p_payment_method: b.payment_method ?? "cash",
+      // "account" is applied by /api/book after a staff check, never through the public RPC.
+      p_payment_method: b.payment_method === "card" ? "card" : "cash",
       p_notes: b.notes ?? null,
       p_scheduled_at: leg.scheduled_at ?? null,
       p_via_points: leg.via_points ?? [],
@@ -269,7 +272,7 @@ export async function notifyBooking(opts: NotifyOptions): Promise<void> {
         carName: (cat as { name?: string } | null)?.name ?? null,
         distanceKm: out.distance_km ?? null,
         fare: totalFare,
-        paymentMethod: (b.payment_method ?? "cash") as "cash" | "card",
+        paymentMethod: b.payment_method ?? "cash",
         paid,
         scheduledAt: out.scheduled_at ?? null,
         isReturn: false,

@@ -11,7 +11,7 @@ export interface ReportFilters {
   from: string;
   to: string;
   status: BookingStatus | "all";
-  payment: "all" | "cash" | "card";
+  payment: "all" | "cash" | "card" | "account";
   /** A driver's id, or null for every driver. */
   driver: string | null;
 }
@@ -59,7 +59,7 @@ export function filtersFromParams(p: URLSearchParams): ReportFilters {
     from: p.get("from") ?? "",
     to: p.get("to") ?? "",
     status: (p.get("status") as BookingStatus | "all") ?? "all",
-    payment: payment === "cash" || payment === "card" ? payment : "all",
+    payment: payment === "cash" || payment === "card" || payment === "account" ? payment : "all",
     driver: p.get("driver") || null,
   };
 }

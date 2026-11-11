@@ -21,9 +21,12 @@ export const KEEP_DAYS = 30;
 /** Tables in a company backup, in the order they are restored. */
 export const BACKUP_TABLES = [
   "app_settings", "websites", "vehicle_categories", "pricing_rules", "pricing_bands", "pricing_zones",
-  "fixed_routes", "drivers", "vehicles", "customers", "bookings", "payments", "ride_events", "ratings",
+  "fixed_routes", "drivers", "vehicles", "customers", "accounts", "bookings", "invoices", "payments", "ride_events", "ratings",
   "cash_settlements", "staff_notifications", "activity_logs",
 ] as const;
+
+/** Added later (db/2026-11-11_accounts.sql): skipped until that SQL has been run. */
+const OPTIONAL_TABLES = new Set<string>(["accounts", "invoices"]);
 
 export interface CompanyBackup {
   version: 1;
@@ -38,14 +41,21 @@ export async function exportCompany(companyId: string): Promise<CompanyBackup> {
   const tables: Record<string, Record<string, unknown>[]> = {};
   for (const t of BACKUP_TABLES) {
     const rows: Record<string, unknown>[] = [];
+    let missing = false;
     // Pages of 1000 (PostgREST's default cap).
     for (let from = 0; ; from += 1000) {
       const { data, error } = await db.from(t).select("*").range(from, from + 999);
-      if (error) throw new Error(`export ${t}: ${error.message}`);
+      if (error) {
+        if (OPTIONAL_TABLES.has(t) && (error.code === "42P01" || error.code === "PGRST205")) {
+          missing = true;
+          break;
+        }
+        throw new Error(`export ${t}: ${error.message}`);
+      }
       rows.push(...((data ?? []) as Record<string, unknown>[]));
       if (!data || data.length < 1000) break;
     }
-    tables[t] = rows;
+    if (!missing) tables[t] = rows;
   }
   return { version: 1, company_id: companyId, exported_at: new Date().toISOString(), tables };
 }

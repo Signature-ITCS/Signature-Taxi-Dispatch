@@ -4,7 +4,7 @@ import Link from "next/link";
 import IdleSignOut from "@/components/IdleSignOut";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Radio, ClipboardList, CarFront, Users, LogOut, Map as MapIcon, CalendarDays, BookOpen, ShieldCheck, Handshake } from "lucide-react";
+import { Radio, ClipboardList, CarFront, Users, LogOut, Map as MapIcon, CalendarDays, BookOpen, ShieldCheck, Handshake, Building2 } from "lucide-react";
 import SignOutButton from "@/components/dashboard/SignOutButton";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/format";
@@ -19,6 +19,7 @@ const NAV = [
   { href: "/dispatch/bookings", label: "Bookings", short: "Bookings", icon: ClipboardList },
   { href: "/dispatch/drivers", label: "Drivers", short: "Drivers", icon: CarFront },
   { href: "/dispatch/customers", label: "Customers", short: "Customers", icon: Users },
+  { href: "/dispatch/accounts", label: "Accounts", short: "Accounts", icon: Building2 },
   { href: "/dispatch/network", label: "Partner network", short: "Partners", icon: Handshake },
   { href: "/documentation/dispatch-board", label: "Help", short: "Help", icon: BookOpen },
 ];
@@ -114,8 +115,8 @@ export default function DispatchShell({
         aria-label="Dispatch navigation"
         className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
       >
-        <div className="grid h-16 grid-cols-8">
-          {/* 7 tabs + Sign out; Help stays in the desktop menu. */}
+        <div className="grid h-16 grid-cols-9">
+          {/* 8 tabs + Sign out; Help stays in the desktop menu. */}
           {NAV.filter((item) => !item.href.startsWith("/documentation")).map((item) => {
             const active = pathname === item.href;
             return (
@@ -123,13 +124,13 @@ export default function DispatchShell({
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 text-[10.5px] font-semibold transition-colors",
+                  "flex min-w-0 flex-col items-center justify-center gap-1 text-[9.5px] font-semibold transition-colors",
                   active ? "text-brand-600" : "text-gray-400 active:text-ink-950"
                 )}
               >
                 <span
                   className={cn(
-                    "flex h-8 w-10 items-center justify-center rounded-full transition-colors",
+                    "flex h-8 w-9 items-center justify-center rounded-full transition-colors",
                     active && "bg-brand-50"
                   )}
                 >
@@ -141,9 +142,9 @@ export default function DispatchShell({
           })}
           <button
             onClick={signOut}
-            className="flex flex-col items-center justify-center gap-1 text-[10.5px] font-semibold text-gray-400 active:text-red-600"
+            className="flex min-w-0 flex-col items-center justify-center gap-1 text-[9.5px] font-semibold text-gray-400 active:text-red-600"
           >
-            <span className="flex h-8 w-10 items-center justify-center rounded-full">
+            <span className="flex h-8 w-9 items-center justify-center rounded-full">
               <LogOut className="h-[20px] w-[20px]" strokeWidth={2} />
             </span>
             Sign out

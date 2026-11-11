@@ -32,7 +32,8 @@ begin
     'public.platform_generate_invoices(integer)',
     'public.platform_mark_invoice_paid(uuid, timestamp with time zone, text)',
     'public.platform_unmark_invoice_paid(uuid)',
-    'public.hit_rate_limit(text, integer, integer)'
+    'public.hit_rate_limit(text, integer, integer)',
+    'public.next_invoice_number(uuid)'
   ] loop
     if to_regprocedure(f) is not null then
       execute format('revoke execute on function %s from public, anon, authenticated', f);

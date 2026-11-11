@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sweepRideThankYous } from "@/lib/thankYou";
 import { runNightlyBackups } from "@/lib/backups";
 import { generateInvoices } from "@/lib/billing";
+import { runMonthlyAccountInvoices } from "@/lib/invoice";
 import { notifyOwner, siteOrigin } from "@/lib/provision";
 
 // Exports every company's backup — give it the longest run a plan allows.
@@ -47,7 +48,13 @@ export async function GET(req: Request) {
     return { created: -1 };
   });
 
-  return NextResponse.json({ ok: true, at: new Date().toISOString(), thanked, backups, invoices });
+  // Each company's corporate-account invoices for last month (first week of the month).
+  const accountInvoices = await runMonthlyAccountInvoices(siteOrigin(new URL(req.url).origin)).catch((err) => {
+    console.error("[keepalive] account invoices failed", err);
+    return { failed: -1 };
+  });
+
+  return NextResponse.json({ ok: true, at: new Date().toISOString(), thanked, backups, invoices, accountInvoices });
 }
 
 async function billingDigest(origin: string) {

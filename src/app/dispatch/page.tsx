@@ -41,6 +41,7 @@ import {
   Map as MapIcon,
   Pencil,
   type LucideIcon,
+  Building2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import DriverMap from "@/components/dispatch/DriverMap";
@@ -50,7 +51,7 @@ import ExternalBookingModal from "@/components/dashboard/ExternalBookingModal";
 import EditBookingModal from "@/components/dashboard/EditBookingModal";
 import LoadError from "@/components/dashboard/LoadError";
 import { matchesDriver } from "@/components/dashboard/DriverSearch";
-import { money, timeAgo, cn, normalizeWhatsapp, isValidPhone, dateTimeFull, dateTime } from "@/lib/format";
+import { money, timeAgo, cn, normalizeWhatsapp, isValidPhone, dateTimeFull, dateTime, paymentLabel } from "@/lib/format";
 import type { Booking, Driver } from "@/lib/types";
 
 interface JobRow extends Booking {
@@ -353,6 +354,7 @@ export default function DispatchPage() {
         ? `💳 PAID by card — ${fare} (do NOT collect cash)`
         : `💳 Card — ${fare} (payment pending)`;
     }
+    if (job.payment_method === "account") return `🏢 ON ACCOUNT — ${fare} (invoiced, do NOT collect payment)`;
     return `💷 CASH to collect — ${fare}`;
   };
 
@@ -698,10 +700,12 @@ export default function DispatchPage() {
                   <p className="flex items-center gap-1.5 text-xs text-gray-500">
                     {selected.payment_method === "cash" ? (
                       <Banknote className="h-3.5 w-3.5" />
+                    ) : selected.payment_method === "account" ? (
+                      <Building2 className="h-3.5 w-3.5" />
                     ) : (
                       <CreditCard className="h-3.5 w-3.5" />
                     )}
-                    {selected.payment_method} · {selected.category?.name ?? "—"}
+                    {paymentLabel(selected.payment_method)} · {selected.category?.name ?? "—"}
                   </p>
 
                   {/* Payment status + trip type */}
@@ -711,6 +715,8 @@ export default function DispatchPage() {
                         "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
                         selected.payment_method === "cash"
                           ? "bg-gray-100 text-gray-600"
+                          : selected.payment_method === "account"
+                          ? "bg-sky-100 text-sky-700"
                           : selected.payment_status === "paid"
                           ? "bg-green-100 text-green-700"
                           : "bg-amber-100 text-amber-700"
@@ -718,6 +724,8 @@ export default function DispatchPage() {
                     >
                       {selected.payment_method === "cash"
                         ? `Cash to collect · ${money(selected.estimated_fare)}`
+                        : selected.payment_method === "account"
+                        ? `On account · ${money(selected.estimated_fare)}`
                         : selected.payment_status === "paid"
                         ? "Paid by card"
                         : "Card — pending"}

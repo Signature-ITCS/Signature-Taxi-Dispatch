@@ -25,6 +25,7 @@ import {
   ListChecks,
   CalendarClock,
   type LucideIcon,
+  Building2,
 } from "lucide-react";
 import JobMap from "@/components/driver/JobMap";
 import { createClient } from "@/lib/supabase/client";
@@ -67,7 +68,7 @@ interface Job {
   hand_luggage: number;
   child_seat: boolean;
   notes: string | null;
-  payment_method: "cash" | "card";
+  payment_method: "cash" | "card" | "account";
   payment_status: string;
   estimated_fare: number | null;
   final_fare: number | null;
@@ -773,13 +774,15 @@ function JobCard({ job, highlight, children }: { job: Job; highlight?: boolean; 
         {job.category?.name && <Chip icon={Car} text={job.category.name} />}
         {job.child_seat && <Chip icon={Baby} text="Child seat" strong />}
         <Chip
-          icon={job.payment_method === "cash" ? Banknote : CreditCard}
+          icon={job.payment_method === "cash" ? Banknote : job.payment_method === "account" ? Building2 : CreditCard}
           text={
             job.payment_method === "cash"
               ? `Cash ${fare != null ? money(fare) : ""}`
-              : job.payment_status === "paid"
-                ? "Paid by card"
-                : "Card"
+              : job.payment_method === "account"
+                ? "On account · nothing to collect"
+                : job.payment_status === "paid"
+                  ? "Paid by card"
+                  : "Card"
           }
           strong={job.payment_method === "cash"}
         />
@@ -962,7 +965,7 @@ interface PastJob {
   created_at: string;
   completed_at: string | null;
   cancelled_at: string | null;
-  payment_method: "cash" | "card";
+  payment_method: "cash" | "card" | "account";
   payment_status: string;
   estimated_fare: number | null;
   final_fare: number | null;
@@ -1037,7 +1040,7 @@ function HistoryTab({ supabase }: { supabase: Supa }) {
             <p className="truncate text-sm text-gray-500">→ {j.dropoff_address}</p>
             <div className="mt-2 flex items-center justify-between text-sm">
               <span className="text-xs text-gray-500">
-                {j.payment_method === "cash" ? "Cash" : "Card"}
+                {j.payment_method === "cash" ? "Cash" : j.payment_method === "account" ? "Account" : "Card"}
                 {j.payment_method === "cash" && j.status === "completed" && j.payment_status !== "paid"
                   ? " · not collected"
                   : ""}

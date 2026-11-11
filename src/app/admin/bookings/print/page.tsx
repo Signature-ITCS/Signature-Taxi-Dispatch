@@ -64,6 +64,7 @@ function Report() {
   const completed = rows.filter((r) => r.status === "completed");
   const cashTotal = completed.filter((r) => r.payment_method === "cash").reduce((s, r) => s + fareOf(r), 0);
   const cardTotal = completed.filter((r) => r.payment_method === "card").reduce((s, r) => s + fareOf(r), 0);
+  const accountTotal = completed.filter((r) => r.payment_method === "account").reduce((s, r) => s + fareOf(r), 0);
   const takings = completed.reduce((s, r) => s + fareOf(r), 0);
   const outstanding = rows
     .filter((r) => r.payment_status !== "paid" && r.status !== "cancelled")
@@ -121,6 +122,7 @@ function Report() {
         <Tile label="Still owed" value={money(outstanding)} />
         <Tile label="Cash (completed)" value={money(cashTotal)} />
         <Tile label="Card (completed)" value={money(cardTotal)} />
+        {accountTotal > 0 && <Tile label="Account (completed)" value={money(accountTotal)} />}
       </div>
 
       {/* Driver settlement — staff only (this report is never shown to customers) */}
